@@ -39,7 +39,28 @@ export const DonationProvider = ({ children }) => {
 
   useEffect(() => {
     loadData();
-  }, [loadData]);
+
+    // Real-time synchronization via Server-Sent Events
+    const unsubscribe = api.subscribeHandoverStream((event) => {
+      console.log('Real-time Handover Event:', event);
+      loadData();
+      if (event.type === 'PICKUP_CONFIRMED') {
+        addToast(`Food Picked Up! In transit to shelter (${event.donationId})`, 'info');
+      } else if (event.type === 'RECEIPT_CONFIRMED') {
+        addToast(`Handover Completed! Food rescued successfully (${event.donationId})`, 'success');
+        confetti({
+          particleCount: 100,
+          spread: 90,
+          origin: { y: 0.6 },
+          colors: ['#10B981', '#34D399', '#FBBF24'],
+        });
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [loadData, addToast]);
 
   // Create new surplus donation
   const createDonation = async (donationData) => {
@@ -123,26 +144,112 @@ export const DonationProvider = ({ children }) => {
     }
   };
 
-  // Delivery agent verifies QR and completes handover
-  const verifyHandover = async ({ taskId, qrToken, safetyChecklist }) => {
+  // STAGE 1: Fetch or generate dynamic pickup QR code
+  const getPickupToken = async (donationId) => {
     try {
-      const res = await api.verifyHandoverQr({ taskId, qrToken, safetyChecklist });
-      setDeliveryTasks((prev) => prev.map((t) => (t.id === taskId ? res.task : t)));
+      return await api.getPickupToken(donationId);
+    } catch (err) {
+      addToast('Failed to load pickup token: ' + err.message, 'error');
+      throw err;
+    }
+  };
 
+  // STAGE 2: Delivery agent scans donor's pickup QR code
+  const verifyPickupScan = async ({ token, taskId, donationId, agentId }) => {
+    try {
+      return await api.verifyPickupScan({ token, taskId, donationId, agentId });
+    } catch (err) {
+      addToast(err.message, 'error');
+      throw err;
+    }
+  };
+
+  // STAGE 2: Delivery agent confirms physical collection
+  const confirmPickup = async ({ tokenId, token, taskId, safetyChecklist, agentId, notes }) => {
+    try {
+      const res = await api.confirmPickup({ tokenId, token, taskId, safetyChecklist, agentId, notes });
       confetti({
-        particleCount: 100,
-        spread: 90,
+        particleCount: 80,
+        spread: 80,
         origin: { y: 0.6 },
-        colors: ['#10B981', '#34D399', '#FBBF24'],
+        colors: ['#8B5CF6', '#3B82F6', '#10B981'],
       });
-
-      addToast('Verified & Handover Complete! Food rescued successfully.', 'success');
+      addToast('Food Picked Up! Delivery agent is en route to recipient shelter.', 'success');
       loadData();
       return res;
     } catch (err) {
       addToast(err.message, 'error');
       throw err;
     }
+  };
+
+  // STAGE 2 / 3: Fetch receipt token for delivery agent to show to recipient
+  const getReceiptToken = async (donationId) => {
+    try {
+      return await api.getReceiptToken(donationId);
+    } catch (err) {
+      addToast('Failed to load receipt token: ' + err.message, 'error');
+      throw err;
+    }
+  };
+
+  // STAGE 3: Recipient scans delivery agent's receipt QR code
+  const verifyReceiptScan = async ({ token, recipientId }) => {
+    try {
+      return await api.verifyReceiptScan({ token, recipientId });
+    } catch (err) {
+      addToast(err.message, 'error');
+      throw err;
+    }
+  };
+
+  // STAGE 3: Recipient confirms actual delivery
+  const confirmReceipt = async ({
+    tokenId,
+    token,
+    donationId,
+    recipientId,
+    recipientName,
+    receivedQuantity,
+    foodCondition,
+    discrepancyNotes,
+  }) => {
+    try {
+      const res = await api.confirmReceipt({
+        tokenId,
+        token,
+        donationId,
+        recipientId,
+        recipientName,
+        receivedQuantity,
+        foodCondition,
+        discrepancyNotes,
+      });
+
+      confetti({
+        particleCount: 120,
+        spread: 100,
+        origin: { y: 0.55 },
+        colors: ['#10B981', '#F59E0B', '#E11D48'],
+      });
+
+      addToast('Handover Complete! Food rescued and distributed.', 'success');
+      loadData();
+      return res;
+    } catch (err) {
+      addToast(err.message, 'error');
+      throw err;
+    }
+  };
+
+  // Delivery agent verifies QR (backwards-compatible alias)
+  const verifyHandover = async ({ taskId, qrToken, safetyChecklist }) => {
+    return confirmPickup({
+      token: qrToken,
+      taskId,
+      safetyChecklist,
+      agentId: 'user-delivery-1',
+    });
   };
 
   // Submit community review & feedback
@@ -181,6 +288,12 @@ export const DonationProvider = ({ children }) => {
         postRequirement,
         acceptDonation,
         updateDeliveryMilestone,
+        getPickupToken,
+        verifyPickupScan,
+        confirmPickup,
+        getReceiptToken,
+        verifyReceiptScan,
+        confirmReceipt,
         verifyHandover,
         submitReview,
       }}

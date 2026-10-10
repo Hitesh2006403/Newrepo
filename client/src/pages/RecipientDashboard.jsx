@@ -6,6 +6,7 @@ import { MatchCard } from '../components/recipient/MatchCard';
 import { PostRequirementModal } from '../components/recipient/PostRequirementModal';
 import { AcceptModal } from '../components/recipient/AcceptModal';
 import { QrCodeModal } from '../components/common/QrCodeModal';
+import { RecipientQrScannerModal } from '../components/recipient/RecipientQrScannerModal';
 import { ReviewsSection } from '../components/common/ReviewsSection';
 import {
   Home,
@@ -16,6 +17,7 @@ import {
   AlertCircle,
   CheckCircle2,
   QrCode,
+  Scan,
   Search,
   X,
   Filter,
@@ -29,6 +31,7 @@ export const RecipientDashboard = ({ isPostReqOpen, setIsPostReqOpen }) => {
   const [dietaryFilter, setDietaryFilter] = useState('ALL');
   const [selectedDonationForClaim, setSelectedDonationForClaim] = useState(null);
   const [selectedDonationForQr, setSelectedDonationForQr] = useState(null);
+  const [selectedDonationForScanner, setSelectedDonationForScanner] = useState(null);
 
   useEffect(() => {
     const fetchMatches = async () => {
@@ -101,39 +104,88 @@ export const RecipientDashboard = ({ isPostReqOpen, setIsPostReqOpen }) => {
       {/* Active Claimed Deliveries in Progress */}
       {claimedDonations.length > 0 && (
         <div className="bg-white rounded-2xl border border-indigo-200 p-5 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-ping" />
               <h4 className="font-bold text-sm text-slate-800">
                 Your Active Claimed Donations (Awaiting Handover)
               </h4>
             </div>
-            <span className="text-xs text-indigo-700 font-semibold bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-200">
-              {claimedDonations.length} Active
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-indigo-700 font-semibold bg-indigo-50 px-2.5 py-1 rounded-full border border-indigo-200">
+                {claimedDonations.length} Active
+              </span>
+              <button
+                onClick={() => setSelectedDonationForScanner(claimedDonations[0])}
+                className="flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-3 py-1.5 rounded-xl shadow-xs transition"
+              >
+                <Scan className="w-3.5 h-3.5" />
+                <span>Scan Delivery QR</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {claimedDonations.map((don) => (
-              <div
-                key={don.id}
-                className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-slate-800 truncate">{don.foodName}</div>
-                  <div className="text-[11px] text-slate-500">
-                    From {don.donorName} • Status: {don.status.replace(/_/g, ' ')}
+            {claimedDonations.map((don) => {
+              const isReadyForReceiptScan = don.status === 'PICKED_UP';
+              const isDelivered = don.status === 'DELIVERED' || don.status === 'COMPLETED';
+
+              return (
+                <div
+                  key={don.id}
+                  className={`border rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    isReadyForReceiptScan
+                      ? 'bg-purple-50/60 border-purple-200'
+                      : isDelivered
+                      ? 'bg-teal-50/60 border-teal-200'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-slate-900 truncate">{don.foodName}</span>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase ${
+                        isDelivered
+                          ? 'bg-teal-100 text-teal-800'
+                          : isReadyForReceiptScan
+                          ? 'bg-purple-100 text-purple-800 animate-pulse'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {don.status.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      From {don.donorName} • Assigned Courier: Vikram Singh (Rider #42)
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 flex items-center gap-2">
+                    {isReadyForReceiptScan ? (
+                      <button
+                        onClick={() => setSelectedDonationForScanner(don)}
+                        className="flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-3.5 py-2 rounded-xl shadow-xs transition"
+                      >
+                        <Scan className="w-3.5 h-3.5" />
+                        <span>Scan Rider QR & Confirm</span>
+                      </button>
+                    ) : isDelivered ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold text-teal-700 bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-300">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Delivered ✓</span>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setSelectedDonationForScanner(don)}
+                        className="flex items-center gap-1 text-xs font-semibold bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg shadow-2xs transition"
+                      >
+                        <Scan className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Scan QR</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-                <button
-                  onClick={() => setSelectedDonationForQr(don)}
-                  className="shrink-0 flex items-center gap-1 text-xs font-semibold bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg shadow-2xs transition"
-                >
-                  <QrCode className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Show QR</span>
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -295,6 +347,12 @@ export const RecipientDashboard = ({ isPostReqOpen, setIsPostReqOpen }) => {
         isOpen={!!selectedDonationForQr}
         onClose={() => setSelectedDonationForQr(null)}
         donation={selectedDonationForQr}
+      />
+
+      <RecipientQrScannerModal
+        isOpen={!!selectedDonationForScanner}
+        onClose={() => setSelectedDonationForScanner(null)}
+        targetDonation={selectedDonationForScanner}
       />
     </div>
   );

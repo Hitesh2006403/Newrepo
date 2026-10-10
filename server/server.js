@@ -3,6 +3,8 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
+import handoverRoutes from './routes/handoverRoutes.js';
+import donationRoutes from './routes/donationRoutes.js';
 
 dotenv.config();
 
@@ -29,8 +31,8 @@ app.use(
       }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-user-id'],
   })
 );
 
@@ -39,6 +41,8 @@ app.use(cookieParser());
 
 // Mount API routes
 app.use('/api/auth', authRoutes);
+app.use('/api/handover', handoverRoutes);
+app.use('/api', donationRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

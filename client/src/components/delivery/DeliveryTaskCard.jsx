@@ -9,11 +9,18 @@ import {
   CheckCircle2,
   Bike,
   ArrowRight,
+  Scan,
 } from 'lucide-react';
-import { StatusBadge } from '../common/StatusBadge';
 
-export const DeliveryTaskCard = ({ task, onUpdateStatus, onOpenQrVerify }) => {
+export const DeliveryTaskCard = ({
+  task,
+  onUpdateStatus,
+  onOpenPickupScan,
+  onOpenReceiptQr,
+}) => {
   const isDelivered = task.currentMilestone === 'DELIVERED';
+  const isPickedUp = task.currentMilestone === 'PICKED_UP';
+  const isPickupStage = !isPickedUp && !isDelivered;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs hover:shadow-md transition-all overflow-hidden flex flex-col justify-between">
@@ -29,13 +36,15 @@ export const DeliveryTaskCard = ({ task, onUpdateStatus, onOpenQrVerify }) => {
               <div className="text-[11px] text-slate-500">{task.quantity} • {task.storageCondition}</div>
             </div>
           </div>
-          <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-            isDelivered
-              ? 'bg-teal-100 text-teal-800 border border-teal-300'
-              : task.currentMilestone === 'PICKED_UP'
-              ? 'bg-purple-100 text-purple-800 border border-purple-300'
-              : 'bg-amber-100 text-amber-800 border border-amber-300'
-          }`}>
+          <span
+            className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+              isDelivered
+                ? 'bg-teal-100 text-teal-800 border border-teal-300'
+                : isPickedUp
+                ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                : 'bg-amber-100 text-amber-800 border border-amber-300'
+            }`}
+          >
             {task.currentMilestone.replace(/_/g, ' ')}
           </span>
         </div>
@@ -48,7 +57,7 @@ export const DeliveryTaskCard = ({ task, onUpdateStatus, onOpenQrVerify }) => {
               <MapPin className="w-3.5 h-3.5 text-rose-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">Pickup Location</div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase">Pickup Location (Donor)</div>
               <div className="text-xs font-semibold text-slate-800 truncate">{task.pickup?.donorName}</div>
               <div className="text-xs text-slate-500 truncate">{task.pickup?.location}</div>
               <a
@@ -67,7 +76,7 @@ export const DeliveryTaskCard = ({ task, onUpdateStatus, onOpenQrVerify }) => {
               <Navigation className="w-3.5 h-3.5 text-emerald-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] font-bold text-slate-400 uppercase">Drop-off Shelter</div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase">Drop-off Shelter (Recipient)</div>
               <div className="text-xs font-semibold text-slate-800 truncate">{task.dropoff?.recipientName}</div>
               <div className="text-xs text-slate-500 truncate">{task.dropoff?.location}</div>
               <a
@@ -89,34 +98,26 @@ export const DeliveryTaskCard = ({ task, onUpdateStatus, onOpenQrVerify }) => {
       </div>
 
       {/* Action Milestones */}
-      <div className="p-4 pt-0">
-        {task.currentMilestone === 'ASSIGNED' && (
+      <div className="p-4 pt-0 space-y-2">
+        {/* Stage 1 Pickup Scanner Action */}
+        {isPickupStage && (
           <button
-            onClick={() => onUpdateStatus(task.id, 'EN_ROUTE_PICKUP')}
-            className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5"
+            onClick={() => onOpenPickupScan(task)}
+            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-2"
           >
-            <span>Start Route (En Route to Donor)</span>
-            <ArrowRight className="w-3.5 h-3.5" />
+            <Scan className="w-4 h-4" />
+            <span>Scan Donor Pickup QR Code</span>
           </button>
         )}
 
-        {task.currentMilestone === 'EN_ROUTE_PICKUP' && (
+        {/* Stage 2 In-Transit: Show Receipt QR to Shelter */}
+        {isPickedUp && (
           <button
-            onClick={() => onUpdateStatus(task.id, 'PICKED_UP')}
-            className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md transition flex items-center justify-center gap-1.5"
-          >
-            <span>Food Picked Up (Proceed to Shelter)</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        )}
-
-        {task.currentMilestone === 'PICKED_UP' && (
-          <button
-            onClick={() => onOpenQrVerify(task)}
-            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition flex items-center justify-center gap-1.5"
+            onClick={() => onOpenReceiptQr(task)}
+            className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-teal-600 hover:from-purple-500 hover:to-teal-500 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition flex items-center justify-center gap-2"
           >
             <QrCode className="w-4 h-4" />
-            <span>Verify QR & Complete Handover</span>
+            <span>Show Recipient Receipt QR Code (Stage 2)</span>
           </button>
         )}
 

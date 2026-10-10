@@ -455,50 +455,256 @@ export const api = {
     return task;
   },
 
-  verifyHandoverQr: async ({ taskId, qrToken, safetyChecklist }) => {
-    if (!USE_MOCK) {
-      const res = await fetch(`${API_BASE}/handover/verify-qr`, {
+  // ----------------------------------------------------
+  // SECURE QR HANDOVER WORKFLOW (STAGES 1, 2, 3)
+  // ----------------------------------------------------
+  // Stage 1: Donor retrieves or generates dynamic secure Pickup QR code
+  getPickupToken: async (donationId) => {
+    try {
+      const res = await fetch(`${API_BASE}/handover/donations/${donationId}/pickup-token`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to fetch pickup QR code');
+      return data;
+    } catch (err) {
+      // Local fallback
+      const don = mockDonations.find((d) => d.id === donationId);
+      return {
+        success: true,
+        token: {
+          id: `tok-pk-${donationId}`,
+          donationId,
+          stage: 'PICKUP',
+          rawToken: don?.handoverQrToken || `SAP-PK-${donationId.toUpperCase()}-SECURE`,
+          tokenHash: 'sha256-mock-hash',
+          expiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+          status: 'ACTIVE',
+        },
+        donation: don || null,
+      };
+    }
+  },
+
+  // Stage 2: Delivery Agent scans donor's pickup QR code (Validation Step)
+  verifyPickupScan: async ({ token, taskId, donationId, agentId }) => {
+    try {
+      const res = await fetch(`${API_BASE}/handover/verify-pickup-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ taskId, qrToken, safetyChecklist }),
+        credentials: 'include',
+        body: JSON.stringify({ token, taskId, donationId, agentId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Pickup QR validation failed.');
+      return data;
+    } catch (err) {
+      if (USE_MOCK) {
+        await delay(200);
+        const task = mockTasks.find((t) => t.id === taskId || t.qrRequiredToken === token);
+        if (!task && !token?.includes('SAP')) throw new Error('Invalid QR code.');
+        return {
+          success: true,
+          message: 'QR verified! Complete physical inspection.',
+          task: task || mockTasks[0],
+          donation: mockDonations.find((d) => d.id === task?.donationId) || mockDonations[0],
+        };
+      }
+      throw err;
+    }
+  },
+
+  // Stage 2: Delivery Agent confirms physical pickup after checklist
+  confirmPickup: async ({ tokenId, token, taskId, safetyChecklist, agentId, notes }) => {
+    try {
+      const res = await fetch(`${API_BASE}/handover/confirm-pickup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ tokenId, token, taskId, safetyChecklist, agentId, notes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Pickup confirmation failed.');
+      return data;
+    } catch (err) {
+      if (USE_MOCK) {
+        await delay(300);
+        const task = mockTasks.find((t) => t.id === taskId);
+        if (task) task.currentMilestone = 'PICKED_UP';
+        const don = mockDonations.find((d) => d.id === task?.donationId);
+        if (don) don.status = 'PICKED_UP';
+        save(STORAGE_KEYS.TASKS, mockTasks);
+        save(STORAGE_KEYS.DONATIONS, mockDonations);
+        return {
+          success: true,
+          task,
+          donation: don,
+          receiptToken: {
+            id: `tok-rc-${task?.id}`,
+            stage: 'RECEIPT',
+            rawToken: `SAP-RC-${task?.donationId?.toUpperCase() || 'DON'}-VERIFIED`,
+            expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+            status: 'ACTIVE',
+          },
+        };
+      }
+      throw err;
+    }
+  },
+
+  // Stage 2 / 3: Delivery Agent retrieves receipt token to present to recipient
+  getReceiptToken: async (donationId) => {
+    try {
+      const res = await fetch(`${API_BASE}/handover/donations/${donationId}/receipt-token`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to fetch receipt token');
+      return data;
+    } catch (err) {
+      return {
+        success: true,
+        token: {
+          id: `tok-rc-${donationId}`,
+          donationId,
+          stage: 'RECEIPT',
+          rawToken: `SAP-RC-${donationId.toUpperCase()}-SECURE`,
+          expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+          status: 'ACTIVE',
+        },
+      };
+    }
+  },
+
+  // Stage 3: Recipient scans delivery agent's receipt QR code (Validation Step)
+  verifyReceiptScan: async ({ token, recipientId }) => {
+    try {
+      const res = await fetch(`${API_BASE}/handover/verify-receipt-scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ token, recipientId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Receipt QR validation failed.');
+      return data;
+    } catch (err) {
+      if (USE_MOCK) {
+        await delay(200);
+        return {
+          success: true,
+          message: 'Receipt QR verified! Confirm food condition.',
+          donation: mockDonations[0],
+          task: mockTasks[0],
+        };
+      }
+      throw err;
+    }
+  },
+
+  // Stage 3: Recipient confirms actual food delivery and condition
+  confirmReceipt: async ({
+    tokenId,
+    token,
+    donationId,
+    recipientId,
+    recipientName,
+    receivedQuantity,
+    foodCondition,
+    discrepancyNotes,
+  }) => {
+    try {
+      const res = await fetch(`${API_BASE}/handover/confirm-receipt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          tokenId,
+          token,
+          donationId,
+          recipientId,
+          recipientName,
+          receivedQuantity,
+          foodCondition,
+          discrepancyNotes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Receipt confirmation failed.');
+      return data;
+    } catch (err) {
+      if (USE_MOCK) {
+        await delay(300);
+        const don = mockDonations.find((d) => d.id === donationId);
+        if (don) don.status = 'DELIVERED';
+        const task = mockTasks.find((t) => t.donationId === donationId);
+        if (task) task.currentMilestone = 'DELIVERED';
+        save(STORAGE_KEYS.DONATIONS, mockDonations);
+        save(STORAGE_KEYS.TASKS, mockTasks);
+        return {
+          success: true,
+          donation: don,
+          task,
+          receipt: {
+            receiptNumber: `REC-MOCK-${donationId}`,
+            donationId,
+            timestamp: new Date().toISOString(),
+          },
+        };
+      }
+      throw err;
+    }
+  },
+
+  // Query handover status & audit trail
+  getHandoverStatus: async (donationId) => {
+    try {
+      const res = await fetch(`${API_BASE}/handover/status/${donationId}`, {
+        credentials: 'include',
       });
       return await res.json();
+    } catch (err) {
+      return null;
     }
-    await delay(400);
-    const task = mockTasks.find((t) => t.id === taskId);
-    if (!task) throw new Error('Task not found');
+  },
 
-    // Strict validation: QR token must match
-    if (qrToken !== task.qrRequiredToken) {
-      throw new Error('Invalid QR Code. Verification failed.');
+  // Server-Sent Events stream subscription
+  subscribeHandoverStream: (onEvent, onError) => {
+    try {
+      const eventSource = new EventSource(`${API_BASE}/handover/stream`, {
+        withCredentials: true,
+      });
+
+      eventSource.onmessage = (event) => {
+        try {
+          const parsed = JSON.parse(event.data);
+          onEvent(parsed);
+        } catch (e) {
+          console.error('Error parsing SSE event:', e);
+        }
+      };
+
+      eventSource.onerror = (err) => {
+        if (onError) onError(err);
+      };
+
+      return () => {
+        eventSource.close();
+      };
+    } catch (e) {
+      console.warn('SSE not supported or failed to initialize:', e);
+      return () => {};
     }
+  },
 
-    // Safety checks validation
-    if (!safetyChecklist.sealIntact || !safetyChecklist.temperatureChecked || !safetyChecklist.noSpillage) {
-      throw new Error('Safety checklist must be fully verified before handover completion.');
-    }
-
-    task.currentMilestone = 'DELIVERED';
-    task.safetyChecklistCompleted = true;
-    task.verifiedAt = new Date().toISOString();
-
-    // Mark donation as completed
-    const don = mockDonations.find((d) => d.id === task.donationId);
-    if (don) {
-      don.status = 'COMPLETED';
-      don.completedAt = new Date().toISOString();
-    }
-
-    // Update metrics
-    mockMetrics.completedDeliveriesCount += 1;
-    mockMetrics.totalMealsRescued += parseInt(task.quantity) || 35;
-    mockMetrics.totalCo2PreventedKg += Math.round((parseInt(task.quantity) || 35) * 1.8);
-
-    save(STORAGE_KEYS.TASKS, mockTasks);
-    save(STORAGE_KEYS.DONATIONS, mockDonations);
-    save(STORAGE_KEYS.METRICS, mockMetrics);
-
-    return { success: true, task, donation: don };
+  // Legacy compatibility wrapper
+  verifyHandoverQr: async ({ taskId, qrToken, safetyChecklist }) => {
+    return api.confirmPickup({
+      token: qrToken,
+      taskId,
+      safetyChecklist,
+      agentId: 'user-delivery-1',
+    });
   },
 
   // ----------------------------------------------------
