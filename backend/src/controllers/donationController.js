@@ -12,6 +12,7 @@ const {
   isExpired,
 } = require('../services/donationStateService');
 const { toDonationView } = require('../utils/donationView');
+const { storageService } = require('../services/storageService');
 
 /**
  * POST /api/v1/donations
@@ -20,9 +21,15 @@ const { toDonationView } = require('../utils/donationView');
  */
 const createDonation = asyncHandler(async (req, res) => {
   const payload = req.body;
+  const derivedAreaLabel =
+    payload.areaLabel ||
+    (payload.address && payload.address.state
+      ? `${payload.address.city}, ${payload.address.state}`
+      : payload.address?.city || 'Local Area');
 
   const donation = new Donation({
     ...payload,
+    areaLabel: derivedAreaLabel,
     donorId: req.user._id,
     remainingQuantity: payload.totalQuantity,
     status: DONATION_STATUS.AVAILABLE,
@@ -506,6 +513,84 @@ const getStatusHistory = asyncHandler(async (req, res) => {
   );
 });
 
+/**
+ * POST /api/v1/donations/:id/photos
+ * Upload photos for an available donation.
+ * Allowed ONLY for owner donor (or admin) while donation status is AVAILABLE and 0 acceptances.
+ * Maximum 5 photos per donation. Max 2 MB per file.
+ */
+const uploadDonationPhotos = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!req.files || req.files.length === 0) {
+    throw new ApiError(400, ERROR_CODES.VALIDATION_ERROR, 'At least one photo file is required');
+  }
+
+  const donation = await Donation.findById(id).populate(
+    'donorId',
+    'name ratingAverage ratingCount phone'
+  );
+  if (!donation) {
+    throw new ApiError(404, ERROR_CODES.NOT_FOUND, `Donation with ID '${id}' not found`);
+  }
+
+  // 1. Ownership check (Donor owner or Admin)
+  const isOwner =
+    donation.donorId?._id?.toString() === req.user._id.toString() ||
+    donation.donorId?.toString() === req.user._id.toString();
+  const isAdmin = req.user.role === ROLES.ADMIN;
+  if (!isOwner && !isAdmin) {
+    throw new ApiError(
+      403,
+      ERROR_CODES.FORBIDDEN,
+      'Only the posting donor can upload photos for this donation'
+    );
+  }
+
+  // 2. Status invariant check (AVAILABLE only, no acceptances)
+  if (
+    donation.status !== DONATION_STATUS.AVAILABLE ||
+    (donation.acceptances && donation.acceptances.length > 0)
+  ) {
+    throw new ApiError(
+      409,
+      ERROR_CODES.INVALID_STATUS_TRANSITION,
+      `Cannot upload photos to a donation in status '${donation.status}'. Photos can only be uploaded while status is AVAILABLE with zero claims.`
+    );
+  }
+
+  // 3. Limit check: max 5 photos total
+  const currentCount = (donation.photos || []).length;
+  if (currentCount + req.files.length > 5) {
+    throw new ApiError(
+      400,
+      ERROR_CODES.VALIDATION_ERROR,
+      `Cannot upload ${req.files.length} photos. Donation already has ${currentCount} photos (maximum 5 allowed).`
+    );
+  }
+
+  // 4. Save files via storage adapter
+  const uploadedUrls = [];
+  for (const file of req.files) {
+    const fileUrl = await storageService.saveFile({
+      buffer: file.buffer,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+    });
+    uploadedUrls.push(fileUrl);
+  }
+
+  donation.photos.push(...uploadedUrls);
+  await donation.save();
+
+  return ApiResponse.send(
+    res,
+    200,
+    'Photos uploaded successfully',
+    toDonationView(donation, req.user)
+  );
+});
+
 module.exports = {
   createDonation,
   getMyDonations,
@@ -515,4 +600,5 @@ module.exports = {
   updateDonation,
   cancelDonation,
   getStatusHistory,
+  uploadDonationPhotos,
 };

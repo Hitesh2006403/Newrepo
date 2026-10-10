@@ -5,6 +5,7 @@ const adminRoutes = require('./adminRoutes');
 const donationRoutes = require('./donationRoutes');
 const requirementRoutes = require('./requirementRoutes');
 const dashboardRoutes = require('./dashboardRoutes');
+const notificationRoutes = require('./notificationRoutes');
 
 const router = express.Router();
 
@@ -35,6 +36,9 @@ router.use('/requirements', requirementRoutes);
 
 // Dashboards and platform analytics (/api/v1/dashboard)
 router.use('/dashboard', dashboardRoutes);
+
+// In-app notifications and automated voice calls (/api/v1/notifications)
+router.use('/notifications', notificationRoutes);
 
 // Test harness verification route (active strictly in test environment)
 if (process.env.NODE_ENV === 'test') {

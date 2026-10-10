@@ -64,6 +64,14 @@ const sweepExpiredDonations = async () => {
       console.log(`[Expiry Sweeper] Marked ${result.modifiedCount} expired donations.`);
     }
 
+    // Trigger deduplicated urgency alerts for remaining near-expiry donations (production/dev loop only)
+    if (process.env.NODE_ENV !== 'test') {
+      const { createUrgencyNotifications } = require('./notificationService');
+      await createUrgencyNotifications().catch((err) => {
+        console.error(`[Expiry Sweeper] Urgency notification dispatch failed: ${err.message}`);
+      });
+    }
+
     return { modifiedCount: result.modifiedCount };
   } catch (error) {
     console.error(`[Expiry Sweeper Error] Sweep operation failed: ${error.message}`);

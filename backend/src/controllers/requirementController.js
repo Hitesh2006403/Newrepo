@@ -78,7 +78,12 @@ const listRequirements = asyncHandler(async (req, res) => {
 
     if (!isOwner && !isAdmin) {
       if (item.address) {
+        const safeArea = item.address.state
+          ? `${item.address.city}, ${item.address.state}`
+          : item.address.city || 'Local Area';
+        item.address.area = safeArea;
         item.address.street = null;
+        item.address.formattedAddress = safeArea;
       }
       if (item.location && Array.isArray(item.location.coordinates)) {
         const [lng, lat] = item.location.coordinates;
@@ -122,7 +127,12 @@ const getRequirementById = asyncHandler(async (req, res) => {
 
   if (!isOwner && !isAdmin) {
     if (item.address) {
+      const safeArea = item.address.state
+        ? `${item.address.city}, ${item.address.state}`
+        : item.address.city || 'Local Area';
+      item.address.area = safeArea;
       item.address.street = null;
+      item.address.formattedAddress = safeArea;
     }
     if (item.location && Array.isArray(item.location.coordinates)) {
       const [lng, lat] = item.location.coordinates;

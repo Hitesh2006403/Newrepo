@@ -120,8 +120,8 @@ To protect donor privacy and prevent food hijacking, exact location and contact 
   2. An administrator (`req.user.role === 'admin'`).
   3. A recipient or delivery agent attached to an active acceptance on that donation.
 * **Public / Discovery View** (All unattached recipients, drivers, and general feed):
-  * Coordinates: Rounded to 2 decimal places (~1.1 km approximate radius).
-  * Address: Street address masked as `"[Hidden until acceptance]"`; only city and formatted neighborhood address shown.
+  * Coordinates: Rounded to 2 decimal places (~1.1 km approximate radius cell).
+  * Address: The street address is completely omitted (`street: null`). `formattedAddress` is never returned as raw text; it is strictly replaced with a safe `area` string derived from structured fields (`areaLabel`, or `${city}, ${state}`), guaranteeing zero leakage regardless of formatting, casing, or abbreviations in street names.
   * Contact: Donor phone number is completely redacted (`null`).
   * Relative Distance: Dynamically computed strictly from the ROUNDED coordinates (never exact), rounded to 1 decimal place (`distanceKm`).
 * `GET /api/v1/donations/:id` and `GET /api/v1/donations/available` enforce these exact redaction rules based on `req.user`.
@@ -160,6 +160,7 @@ All failure responses follow the standard JSON error envelope (`success: false, 
 | `/api/v1/donations` | GET | ❌ | ✅ | ✅ | ✅ | ✅ | Filtered listing; PII redacted for non-owners |
 | `/api/v1/donations/:id` | GET | ❌ | ✅ | ✅ | ✅ | ✅ | PII redacted unless donor, admin, or attached recipient/driver |
 | `/api/v1/donations/:id` | PATCH | ❌ | ✅ | ❌ | ❌ | ✅ | Owner only; allowed ONLY when status = `AVAILABLE` and 0 acceptances |
+| `/api/v1/donations/:id/photos` | POST | ❌ | ✅ | ❌ | ❌ | ❌ | Donor owner only; allowed ONLY when status = `AVAILABLE` and 0 acceptances |
 | `/api/v1/donations/:id/cancel` | POST | ❌ | ✅ | ❌ | ❌ | ✅ | Owner only; before pickup |
 | `/api/v1/donations/:id/status-history`| GET | ❌ | ✅ | ✅ | ✅ | ✅ | Parties attached to donation |
 | `/api/v1/donations/:id/accept` | POST | ❌ | ❌ | ✅ | ❌ | ✅ | **Verified** recipients only *(Member 3 stub)* |
@@ -174,6 +175,12 @@ All failure responses follow the standard JSON error envelope (`success: false, 
 | `/api/v1/pickups/:id/safety-check`| POST | ❌ | ❌ | ✅ | ✅ | ✅ | Driver / Recipient *(Member 4 stub)* |
 | `/api/v1/pickups/:id/verify-handover-qr`| POST| ❌ | ❌ | ✅ | ✅ | ✅ | Recipient / Driver *(Member 4 stub)* |
 | `/api/v1/ratings` | POST | ❌ | ✅ | ✅ | ❌ | ✅ | Decoupled; post-completion *(Member 4 stub)* |
+| `/api/v1/notifications` | GET | ❌ | ✅ | ✅ | ✅ | ✅ | Authenticated; user's own in-app notification feed |
+| `/api/v1/notifications/:id/read` | PATCH | ❌ | ✅ | ✅ | ✅ | ✅ | Notification owner only (IDOR protected) |
+| `/api/v1/notifications/read-all` | PATCH | ❌ | ✅ | ✅ | ✅ | ✅ | Authenticated; marks all own notifications read |
+| `/api/v1/notifications/ai-call/trigger` | POST | ❌ | ❌ | ❌ | ❌ | ✅ | Admin only; urgent outbound telephony alert |
+| `/api/v1/notifications/ai-call/:id` | GET | ❌ | ✅ | ✅ | ❌ | ✅ | Admin or recipient target user |
+| `/uploads/:filename` | GET | ✅ | ✅ | ✅ | ✅ | ✅ | Public static; UUID/safe filename whitelist, nosniff |
 | `/api/v1/dashboard/impact` | GET | ✅ | ✅ | ✅ | ✅ | ✅ | Public aggregated statistics (rate-limited, 60s cache) |
 | `/api/v1/dashboard/donor` | GET | ❌ | ✅ | ❌ | ❌ | ✅ | Donor only; personal donation metrics |
 | `/api/v1/dashboard/recipient` | GET | ❌ | ❌ | ✅ | ❌ | ✅ | Verified recipients only; demand & claims metrics |
@@ -434,6 +441,34 @@ All failure responses follow the standard JSON error envelope (`success: false, 
 * **Method & Path**: `GET /api/v1/donations/:id/status-history`
 * **Auth**: Bearer Token required
 
+#### 9. Upload Donation Photos
+* **Method & Path**: `POST /api/v1/donations/:id/photos`
+* **Auth**: Bearer Token (`donor` owner only)
+* **Preconditions**:
+  1. Donation must exist and `donorId === req.user.id`.
+  2. Status must be `AVAILABLE`.
+  3. No claims exist (`acceptances.length === 0`).
+  4. Total photos on the donation cannot exceed 5.
+* **Content-Type**: `multipart/form-data`
+* **Form Field**: `photos` (up to 5 files, maximum 2 MB per file)
+* **Allowed MIME Types**: `image/jpeg`, `image/png`, `image/webp` (strictly verified by real magic byte signatures).
+* **Storage & Serving**:
+  - Saved using random UUID filenames in `backend/uploads/` via `storageService.js` adapter.
+  - Served via restricted route `GET /uploads/:filename` or `GET /api/v1/uploads/:filename` (hardened against path traversal, sends `X-Content-Type-Options: nosniff`).
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Photos uploaded successfully",
+  "data": {
+    "photos": [
+      "/uploads/c8a34fcb-7f32-4d2b-b6b8-29472e391cb4.jpg"
+    ],
+    "totalPhotos": 1
+  }
+}
+```
+
 ---
 
 ### E. Recipient Requirements Management (`Member 2` foundation / `Member 3` matching input)
@@ -577,22 +612,121 @@ All failure responses follow the standard JSON error envelope (`success: false, 
 
 ---
 
-### H. Notifications & AI Voice Call Stubs (`Stub — Team Shared`)
+### H. In-App Notifications & Automated AI Voice Calls (`Member 2 Foundation`)
 
-#### 1. Notification Feed *(Stub)*
+#### 1. In-App Notification Feed
 * **Method & Path**: `GET /api/v1/notifications`
 * **Auth**: Bearer Token required
-* **Description**: Returns in-app alert messages (e.g., "New donation matched", "Pickup scheduled").
+* **Query Parameters**:
+  - `page`: Integer (default 1)
+  - `limit`: Integer (default 20, max 50)
+  - `unread`: Boolean string (`true` filters strictly unread notifications)
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Notifications retrieved successfully",
+  "data": {
+    "notifications": [
+      {
+        "id": "6707c91fb123456789012399",
+        "userId": "6707c5a0b12345678901234a",
+        "type": "EXPIRING_SOON",
+        "title": "Donation Expiring Soon",
+        "message": "Donation 'Fresh Biryani' has 25 minutes left before safety buffer expiry.",
+        "donationId": "6707c91fb12345678901234b",
+        "readAt": null,
+        "createdAt": "2026-10-10T18:00:00.000Z"
+      }
+    ],
+    "unreadCount": 1,
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "totalPages": 1
+    }
+  }
+}
+```
 
-#### 2. Trigger Automated Emergency AI Voice Call *(Stub)*
+#### 2. Mark Single Notification as Read
+* **Method & Path**: `PATCH /api/v1/notifications/:id/read`
+* **Auth**: Bearer Token (recipient owner only; IDOR protected)
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Notification marked as read",
+  "data": {
+    "notification": {
+      "id": "6707c91fb123456789012399",
+      "readAt": "2026-10-10T18:05:00.000Z"
+    }
+  }
+}
+```
+
+#### 3. Mark All Notifications as Read
+* **Method & Path**: `PATCH /api/v1/notifications/read-all`
+* **Auth**: Bearer Token (marks all notifications for the authenticated user)
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "All notifications marked as read",
+  "data": {
+    "markedReadCount": 3
+  }
+}
+```
+
+#### 4. Trigger Urgent Automated AI Voice Call (Stub)
 * **Method & Path**: `POST /api/v1/notifications/ai-call/trigger`
-* **Auth**: Bearer Token (`admin` or internal cron trigger)
-* **Description**: Triggered automatically when a high-quantity donation has `< 90` minutes remaining until effective expiry and has not been claimed. Places automated voice call via Twilio/Bland AI to nearest registered recipients.
+* **Auth**: Bearer Token (`admin` only)
+* **Description**: Simulates outbound AI telephony provider call for donations with urgent impending expiry (< 15 min). Phone numbers are masked in logs and stored records.
 * **Request Body**:
 ```json
 {
   "donationId": "6707c91fb12345678901234b",
-  "recipientId": "6707c5a0b12345678901234a"
+  "recipientPhone": "+919876543210"
+}
+```
+* **Response (201 Created)**:
+```json
+{
+  "success": true,
+  "message": "AI voice call dispatched successfully",
+  "data": {
+    "call": {
+      "callId": "call_mock_4b1a8f9c2d1e0123",
+      "recipientPhone": "+91******3210",
+      "donationId": "6707c91fb12345678901234b",
+      "status": "INITIATED",
+      "createdAt": "2026-10-10T18:10:00.000Z"
+    }
+  }
+}
+```
+
+#### 5. Get AI Voice Call Record
+* **Method & Path**: `GET /api/v1/notifications/ai-call/:id`
+* **Auth**: Bearer Token (`admin` or target recipient user)
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Voice call record retrieved successfully",
+  "data": {
+    "call": {
+      "callId": "call_mock_4b1a8f9c2d1e0123",
+      "recipientPhone": "+91******3210",
+      "donationId": "6707c91fb12345678901234b",
+      "status": "COMPLETED",
+      "transcript": "Hello, this is an automated dispatch from Share A Plate...",
+      "createdAt": "2026-10-10T18:10:00.000Z"
+    }
+  }
 }
 ```
 

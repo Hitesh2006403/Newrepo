@@ -10,6 +10,7 @@ const {
   cancelDonationSchema,
 } = require('../validations/donationValidation');
 const { ROLES } = require('../constants/roles');
+const upload = require('../middlewares/uploadMiddleware');
 
 const router = express.Router();
 
@@ -71,6 +72,13 @@ router.patch(
   '/:id',
   validate({ body: updateDonationSchema }),
   donationController.updateDonation
+);
+
+// POST /api/v1/donations/:id/photos - Upload photos for donation (Owner donor only)
+router.post(
+  '/:id/photos',
+  upload.array('photos', 5),
+  donationController.uploadDonationPhotos
 );
 
 // GET /api/v1/donations/:id - Single donation view with role-scoped PII redaction

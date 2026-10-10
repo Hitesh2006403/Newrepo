@@ -44,6 +44,7 @@ const createDonationSchema = z
     photos: z.array(z.string().url('Photos must be valid URLs')).max(5, 'Maximum 5 photos allowed').optional().default([]),
     location: locationSchema,
     address: addressSchema,
+    areaLabel: z.string().trim().max(100).optional(),
   })
   .strict()
   .superRefine((data, ctx) => {
@@ -116,6 +117,7 @@ const updateDonationSchema = z
     instructions: z.string().trim().max(500).optional(),
     pickupWindowEnd: z.coerce.date().optional(),
     photos: z.array(z.string().url()).max(5).optional(),
+    areaLabel: z.string().trim().max(100).optional(),
   })
   .strict();
 

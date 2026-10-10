@@ -315,3 +315,58 @@ Reuse existing error codes from `src/constants/errorCodes.js`:
 If you need a new error code (e.g., `INVALID_QR_CODE`):
 1. Request Member 2 to add the key and value to `backend/src/constants/errorCodes.js`.
 2. Use `throw new ApiError(400, ERROR_CODES.INVALID_QR_CODE, 'QR signature verification failed');`.
+
+---
+
+## 7. Extras & Teammate Utilities (Photos, Notifications & Privacy)
+
+### A. Strict Address Privacy in Custom Views
+When returning donation data to clients in Member 3 matching endpoints or Member 4 delivery listings:
+* **Always pass through `toDonationView(donation, viewerUser)`** from `src/utils/donationView.js`.
+* If `viewerUser` is not the donor, an admin, or an attached recipient/driver, `toDonationView` automatically:
+  1. Sets `address.street = null`.
+  2. Sets `address.formattedAddress` to a safe derived `area` string (`donation.areaLabel` or `${city}, ${state}`).
+  3. Rounds coordinates to 2 decimal places.
+  4. Redacts donor phone number.
+
+### B. Donation Photo Uploads (`storageService.js`)
+* Donors can attach up to 5 photos to a donation via `POST /api/v1/donations/:id/photos` (handled by Member 2).
+* Photos are stored locally in `backend/uploads/` (or via Cloudinary if the adapter is replaced).
+* Photo URLs stored on `donation.photos` are served through `/uploads/:filename` or `/api/v1/uploads/:filename`.
+
+### C. Triggering In-App Notifications
+Teammates can trigger notifications to donors, recipients, or delivery agents during matching and logistics workflows:
+```javascript
+const { createNotification } = require('../services/notificationService');
+
+// Example: Member 3 notifying donor when food is claimed
+await createNotification(
+  donation.donorId,
+  'CLAIMED',
+  'Donation Claimed',
+  `Your donation "${donation.foodName}" was claimed by ${recipientName}.`,
+  donation._id
+);
+
+// Example: Member 4 notifying recipient when pickup is scheduled
+await createNotification(
+  recipientId,
+  'PICKUP_SCHEDULED',
+  'Pickup Scheduled',
+  `Pickup has been scheduled for donation "${donation.foodName}".`,
+  donation._id
+);
+```
+
+### D. Automated Urgent AI Voice Call Stub
+For ultra-urgent donations (< 15 min to expiry), Member 3's engine or Member 4's emergency rerouting can invoke:
+```javascript
+const { voiceCallService } = require('../services/voiceCallService');
+
+// Outbound emergency alert stub
+const callRecord = await voiceCallService.triggerUrgentCall({
+  donationId: donation._id,
+  recipientPhone: recipient.phone,
+});
+// Masked phone number logged and returned safely
+```

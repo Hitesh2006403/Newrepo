@@ -25,8 +25,23 @@ const errorHandler = (err, req, res, next) => {
   else if (err.type === 'entity.too.large' || err.status === 413 || err.statusCode === 413) {
     statusCode = 413;
     errorCode = ERROR_CODES.PAYLOAD_TOO_LARGE;
-    message = 'Request payload exceeds 10kb size limit';
+    message = 'Request payload exceeds size limit';
     details = [{ field: 'body', issue: 'Payload exceeds maximum allowed size' }];
+  }
+
+  // 3. Multer Upload Errors
+  else if (err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      statusCode = 413;
+      errorCode = ERROR_CODES.PAYLOAD_TOO_LARGE;
+      message = 'Uploaded file exceeds the 2 MB size limit';
+      details = [{ field: 'photos', issue: 'File size must not exceed 2 MB' }];
+    } else {
+      statusCode = 400;
+      errorCode = ERROR_CODES.VALIDATION_ERROR;
+      message = err.message || 'File upload validation error';
+      details = [{ field: 'photos', issue: err.message }];
+    }
   }
 
   // 3. Zod Schema Validation Error

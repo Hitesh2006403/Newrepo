@@ -139,6 +139,11 @@ const DonationSchema = new mongoose.Schema(
         trim: true,
       },
     },
+    areaLabel: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     status: {
       type: String,
       enum: {

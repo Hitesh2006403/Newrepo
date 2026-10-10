@@ -2,18 +2,20 @@
  * End-to-End Smoke Test Runner for Share A Plate
  *
  * Runs completely offline against mongodb-memory-server (NEVER touches Atlas or remote DBs).
- * Walks through the complete 11-step lifecycle using real HTTP requests:
+ * Walks through the complete 13-step lifecycle using real HTTP requests:
  *   Step 1:  Seed users (admin & unverified recipients)
  *   Step 2:  Donor registers publicly and receives JWT token
  *   Step 3:  Admin verifies recipient account
  *   Step 4:  Donor creates food donation (status AVAILABLE)
- *   Step 5:  Recipient lists available donations (sees rounded location & masked PII)
+ *   Step 5:  Recipient lists available donations (sees rounded location & safe area)
  *   Step 6:  Unverified recipient is blocked (403 UNVERIFIED_ACCOUNT)
  *   Step 7:  Donor edits available donation
- *   Step 8:  Donor cancels another donation before pickup
- *   Step 9:  Public impact dashboard accessed without auth (zero PII)
- *   Step 10: Admin donation feed retrieved with countdown metrics
- *   Step 11: Deactivated user is locked out from API calls and login
+ *   Step 8:  Donor uploads photo to donation & verifies static retrieval (nosniff)
+ *   Step 9:  In-app notification created, retrieved, and marked as read
+ *   Step 10: Donor cancels another donation before pickup
+ *   Step 11: Public impact dashboard accessed without auth (zero PII)
+ *   Step 12: Admin donation feed retrieved with countdown metrics
+ *   Step 13: Deactivated user is locked out from API calls and login
  */
 
 // Set isolated test environment variables before any application module loads
@@ -28,10 +30,16 @@ const request = require('supertest');
 
 const app = require('../app');
 const User = require('../src/models/User');
+const Notification = require('../src/models/Notification');
+const { createNotification } = require('../src/services/notificationService');
 const { ROLES } = require('../src/constants/roles');
 const ERROR_CODES = require('../src/constants/errorCodes');
 
 let mongoServer;
+
+const validSmokeJpeg = Buffer.from([
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
+]);
 
 const runStep = async (stepNumber, stepTitle, fn) => {
   try {
@@ -66,6 +74,7 @@ async function main() {
   let donorUser, donorToken;
   let verifiedRecipientToken;
   let donation1Id, donation2Id;
+  let createdNotificationId;
 
   try {
     // -------------------------------------------------------------------------
@@ -212,7 +221,7 @@ async function main() {
     });
 
     // -------------------------------------------------------------------------
-    // Step 5: Recipient lists available (sees rounded location & masked street)
+    // Step 5: Recipient lists available (sees rounded location & safe area)
     // -------------------------------------------------------------------------
     await runStep(5, 'Recipient lists available donations and sees rounded location', async () => {
       const res = await request(app)
@@ -276,9 +285,71 @@ async function main() {
     });
 
     // -------------------------------------------------------------------------
-    // Step 8: Donor cancels another donation
+    // Step 8: Donor uploads photo & verifies static serving
     // -------------------------------------------------------------------------
-    await runStep(8, 'Donor cancels another donation before pickup (status CANCELLED)', async () => {
+    await runStep(8, 'Donor uploads photo to donation and verifies static serving', async () => {
+      const uploadRes = await request(app)
+        .post(`/api/v1/donations/${donation1Id}/photos`)
+        .set('Authorization', `Bearer ${donorToken}`)
+        .attach('photos', validSmokeJpeg, 'biryani_smoke.jpg');
+
+      if (uploadRes.status !== 200 || !uploadRes.body.success || !uploadRes.body.data.photos.length) {
+        const err = new Error('Photo upload failed');
+        err.response = uploadRes;
+        throw err;
+      }
+
+      const photoUrl = uploadRes.body.data.photos[0];
+      const staticRes = await request(app).get(photoUrl);
+
+      if (staticRes.status !== 200 || staticRes.headers['x-content-type-options'] !== 'nosniff') {
+        const err = new Error('Static photo serving or nosniff header verification failed');
+        err.response = staticRes;
+        throw err;
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // Step 9: In-app notification creation & lifecycle
+    // -------------------------------------------------------------------------
+    await runStep(9, 'In-app notification created, retrieved, and marked as read', async () => {
+      // 1. Create notification for recipient
+      const notif = await createNotification(
+        recipientToVerify._id,
+        'EXPIRING_SOON',
+        'Urgent Food Available',
+        'A hot meal donation is available near your location.',
+        donation1Id
+      );
+      createdNotificationId = notif._id;
+
+      // 2. Fetch notifications for verified recipient
+      const getRes = await request(app)
+        .get('/api/v1/notifications?unread=true')
+        .set('Authorization', `Bearer ${verifiedRecipientToken}`);
+
+      if (getRes.status !== 200 || !getRes.body.data.notifications || getRes.body.data.unreadCount < 1) {
+        const err = new Error('Failed to retrieve unread notifications');
+        err.response = getRes;
+        throw err;
+      }
+
+      // 3. Mark notification as read
+      const markRes = await request(app)
+        .patch(`/api/v1/notifications/${createdNotificationId}/read`)
+        .set('Authorization', `Bearer ${verifiedRecipientToken}`);
+
+      if (markRes.status !== 200 || !markRes.body.data.notification.readAt) {
+        const err = new Error('Failed to mark notification as read');
+        err.response = markRes;
+        throw err;
+      }
+    });
+
+    // -------------------------------------------------------------------------
+    // Step 10: Donor cancels another donation
+    // -------------------------------------------------------------------------
+    await runStep(10, 'Donor cancels another donation before pickup (status CANCELLED)', async () => {
       const now = Date.now();
       const res2 = await request(app)
         .post('/api/v1/donations')
@@ -313,9 +384,9 @@ async function main() {
     });
 
     // -------------------------------------------------------------------------
-    // Step 9: Public impact endpoint
+    // Step 11: Public impact endpoint
     // -------------------------------------------------------------------------
-    await runStep(9, 'Public impact dashboard accessed without auth (zero PII)', async () => {
+    await runStep(11, 'Public impact dashboard accessed without auth (zero PII)', async () => {
       const res = await request(app).get('/api/v1/dashboard/impact');
 
       if (res.status !== 200 || !res.body.success) {
@@ -348,9 +419,9 @@ async function main() {
     });
 
     // -------------------------------------------------------------------------
-    // Step 10: Admin donation feed
+    // Step 12: Admin donation feed
     // -------------------------------------------------------------------------
-    await runStep(10, 'Admin retrieves full donation audit feed with countdown metrics', async () => {
+    await runStep(12, 'Admin retrieves full donation audit feed with countdown metrics', async () => {
       const res = await request(app)
         .get('/api/v1/admin/donations?page=1&limit=10')
         .set('Authorization', `Bearer ${adminToken}`);
@@ -368,9 +439,9 @@ async function main() {
     });
 
     // -------------------------------------------------------------------------
-    // Step 11: Deactivated user is locked out
+    // Step 13: Deactivated user is locked out
     // -------------------------------------------------------------------------
-    await runStep(11, 'Deactivated user is locked out from API calls and login', async () => {
+    await runStep(13, 'Deactivated user is locked out from API calls and login', async () => {
       // 1. Admin deactivates donor
       const deactRes = await request(app)
         .patch(`/api/v1/admin/users/${donorUser.id || donorUser._id}/deactivate`)
@@ -406,7 +477,7 @@ async function main() {
     });
 
     console.log('\n======================================================');
-    console.log('  \x1b[32m✔ ALL 11 END-TO-END SMOKE TEST STEPS PASSED!\x1b[0m');
+    console.log('  \x1b[32m✔ ALL 13 END-TO-END SMOKE TEST STEPS PASSED!\x1b[0m');
     console.log('======================================================\n');
   } finally {
     await mongoose.disconnect();

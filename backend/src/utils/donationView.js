@@ -99,25 +99,38 @@ const toDonationView = (donationDoc, viewer = null, viewerLocationOrDistance = n
       ratingCount: donorObj.ratingCount || 0,
       phone: canViewFullPII ? donorObj.phone : null,
     };
+    donation.donorPhone = canViewFullPII ? donorObj.phone : null;
     if (!canViewFullPII) {
       donation.donorId.phone = null;
     }
+  } else {
+    donation.donorPhone = canViewFullPII ? donation.donorPhone || null : null;
   }
+
+  // Set area label on donation for all viewers
+  const safeArea =
+    donation.areaLabel ||
+    (donation.address && donation.address.city && donation.address.state
+      ? `${donation.address.city}, ${donation.address.state}`
+      : donation.address?.city || 'Local Area');
+  donation.areaLabel = safeArea;
 
   // Apply privacy redaction for general public / unattached viewers
   if (!canViewFullPII) {
     if (donation.address) {
-      const rawStreet = donation.address.street;
-      let safeFormattedAddress = donation.address.formattedAddress;
-      if (rawStreet && safeFormattedAddress && safeFormattedAddress.includes(rawStreet)) {
-        safeFormattedAddress = safeFormattedAddress.replace(rawStreet, '[Hidden until acceptance]').trim();
-      }
       donation.address = {
         city: donation.address.city,
         state: donation.address.state || null,
         postalCode: donation.address.postalCode || null,
-        formattedAddress: safeFormattedAddress,
-        street: null, // Redacted
+        area: safeArea,
+        street: null, // Completely redacted
+        formattedAddress: safeArea, // Safe area string only, NEVER original formattedAddress
+      };
+    } else {
+      donation.address = {
+        area: safeArea,
+        street: null,
+        formattedAddress: safeArea,
       };
     }
 

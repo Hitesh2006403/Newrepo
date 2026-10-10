@@ -8,8 +8,47 @@ const PORT = process.env.PORT || 5000;
 let server;
 let sweeperInterval;
 
+/**
+ * Validates that all critical secrets and configuration parameters are configured
+ * securely when running in production mode.
+ *
+ * @param {Object} [env=process.env]
+ * @throws {Error} If any mandatory variable is missing or retains default placeholder
+ */
+const validateProductionEnv = (env = process.env) => {
+  if (env.NODE_ENV !== 'production') {
+    return;
+  }
+
+  const requiredVariables = [
+    'MONGODB_URI',
+    'JWT_SECRET',
+    'CLIENT_URL',
+    'QR_SIGNING_SECRET',
+  ];
+
+  const violations = [];
+
+  for (const varName of requiredVariables) {
+    const val = env[varName];
+    if (!val || typeof val !== 'string' || val.trim() === '') {
+      violations.push(`${varName} is missing`);
+    } else if (val.toLowerCase().includes('change-me')) {
+      violations.push(`${varName} still contains placeholder "change-me"`);
+    }
+  }
+
+  if (violations.length > 0) {
+    const errorMsg = `[Fatal Startup Guard] Production environment validation failed:\n - ${violations.join(
+      '\n - '
+    )}`;
+    throw new Error(errorMsg);
+  }
+};
+
 const startServer = async () => {
   try {
+    validateProductionEnv();
     await connectDB();
     sweeperInterval = startExpirySweeper(300000); // 5 minutes
     server = app.listen(PORT, () => {
@@ -17,13 +56,14 @@ const startServer = async () => {
         `[Server] Share A Plate API listening in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`
       );
     });
+    return server;
   } catch (error) {
     console.error(`[Server Fatal] Initialization failed: ${error.message}`);
     process.exit(1);
   }
 };
 
-// Start the HTTP listener
+// Start the HTTP listener in non-test mode
 if (process.env.NODE_ENV !== 'test') {
   startServer();
 }
@@ -31,6 +71,9 @@ if (process.env.NODE_ENV !== 'test') {
 // Graceful shutdown listeners
 const handleShutdown = async (signal) => {
   console.log(`[Server] ${signal} signal received. Commencing graceful shutdown...`);
+  if (sweeperInterval) {
+    clearInterval(sweeperInterval);
+  }
   if (server) {
     server.close(async () => {
       console.log('[Server] HTTP connection pool drained and server closed.');
@@ -56,4 +99,8 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-module.exports = server;
+module.exports = {
+  server,
+  startServer,
+  validateProductionEnv,
+};
