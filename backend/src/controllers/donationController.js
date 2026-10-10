@@ -128,10 +128,35 @@ const getAvailableDonations = asyncHandler(async (req, res) => {
 
   // Geospatial proximity filtering if coordinates are provided
   let userCoordinates = null;
-  if (req.query.lat && req.query.lng) {
+  if (req.query.lat !== undefined || req.query.lng !== undefined) {
+    if (req.query.lat === undefined || req.query.lng === undefined) {
+      throw new ApiError(
+        400,
+        ERROR_CODES.VALIDATION_ERROR,
+        'Both lat and lng coordinates must be provided together'
+      );
+    }
     const lat = parseFloat(req.query.lat);
     const lng = parseFloat(req.query.lng);
-    const maxDistanceKm = parseFloat(req.query.maxDistanceKm) || 25;
+    if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lng) || lng < -180 || lng > 180) {
+      throw new ApiError(
+        400,
+        ERROR_CODES.VALIDATION_ERROR,
+        'Latitude must be between -90 and 90, and longitude between -180 and 180'
+      );
+    }
+    let maxDistanceKm = 25;
+    if (req.query.maxDistanceKm !== undefined) {
+      const parsedDist = parseFloat(req.query.maxDistanceKm);
+      if (isNaN(parsedDist) || parsedDist <= 0 || parsedDist > 500) {
+        throw new ApiError(
+          400,
+          ERROR_CODES.VALIDATION_ERROR,
+          'maxDistanceKm must be a positive number up to 500'
+        );
+      }
+      maxDistanceKm = parsedDist;
+    }
     userCoordinates = [lng, lat];
 
     filter.location = {

@@ -107,10 +107,18 @@ const listAdminDonations = asyncHandler(async (req, res) => {
   if (req.query.dateFrom || req.query.dateTo) {
     filter.createdAt = {};
     if (req.query.dateFrom) {
-      filter.createdAt.$gte = new Date(req.query.dateFrom);
+      const dFrom = new Date(req.query.dateFrom);
+      if (isNaN(dFrom.getTime())) {
+        throw new ApiError(400, ERROR_CODES.VALIDATION_ERROR, 'Invalid dateFrom query parameter format');
+      }
+      filter.createdAt.$gte = dFrom;
     }
     if (req.query.dateTo) {
-      filter.createdAt.$lte = new Date(req.query.dateTo);
+      const dTo = new Date(req.query.dateTo);
+      if (isNaN(dTo.getTime())) {
+        throw new ApiError(400, ERROR_CODES.VALIDATION_ERROR, 'Invalid dateTo query parameter format');
+      }
+      filter.createdAt.$lte = dTo;
     }
   }
 

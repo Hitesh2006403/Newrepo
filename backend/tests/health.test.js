@@ -35,4 +35,79 @@ describe('System Health & Base Router Integration', () => {
       expect(res.body.error.details).toBeNull();
     });
   });
+
+  describe('Centralized errorHandler Middleware Unit Coverage', () => {
+    const errorHandler = require('../src/middlewares/errorHandler');
+
+    const createMockRes = () => {
+      const res = {};
+      res.statusCode = null;
+      res.body = null;
+      res.status = (code) => {
+        res.statusCode = code;
+        return res;
+      };
+      res.json = (body) => {
+        res.body = body;
+        return res;
+      };
+      return res;
+    };
+
+    it('should format Mongoose ValidationError properly', () => {
+      const err = {
+        name: 'ValidationError',
+        errors: {
+          field1: { message: 'field1 is invalid' },
+        },
+      };
+      const res = createMockRes();
+      errorHandler(err, {}, res, () => {});
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body.error.code).toBe(ERROR_CODES.VALIDATION_ERROR);
+      expect(res.body.error.details).toEqual([{ field: 'field1', issue: 'field1 is invalid' }]);
+    });
+
+    it('should format MongoDB duplicate key error 11000 properly', () => {
+      const err = {
+        code: 11000,
+        name: 'MongoServerError',
+        keyPattern: { email: 1 },
+      };
+      const res = createMockRes();
+      errorHandler(err, {}, res, () => {});
+
+      expect(res.statusCode).toBe(409);
+      expect(res.body.error.code).toBe(ERROR_CODES.CONFLICT);
+      expect(res.body.error.details).toEqual([{ field: 'email', issue: 'Value must be unique' }]);
+    });
+
+    it('should format JsonWebTokenError and TokenExpiredError properly', () => {
+      const res1 = createMockRes();
+      errorHandler({ name: 'JsonWebTokenError' }, {}, res1, () => {});
+      expect(res1.statusCode).toBe(401);
+      expect(res1.body.error.code).toBe(ERROR_CODES.UNAUTHORIZED);
+
+      const res2 = createMockRes();
+      errorHandler({ name: 'TokenExpiredError' }, {}, res2, () => {});
+      expect(res2.statusCode).toBe(401);
+      expect(res2.body.error.code).toBe(ERROR_CODES.UNAUTHORIZED);
+    });
+
+    it('should attach stack trace in development mode', () => {
+      const originalEnv = process.env.NODE_ENV;
+      try {
+        process.env.NODE_ENV = 'development';
+        const res = createMockRes();
+        const err = new Error('Test Dev Error');
+        err.stack = 'MockStack: at something';
+        errorHandler(err, {}, res, () => {});
+
+        expect(res.body.error.stack).toBe('MockStack: at something');
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+      }
+    });
+  });
 });

@@ -92,6 +92,7 @@ const { id } = req.validated.params;
 5. **Never Trust Client Claims**: Never accept status, match scores, or remaining quantities from the client request. Always calculate balances server-side.
 6. **Completion Guard**: A donation or acceptance reaches `COMPLETED` strictly after drop-off QR verification AND a passed safety inspection (`visualSpoilageOrSmell !== true` and `passed === true`).
 7. **Never Deliver Expired Food**: If food crosses `effectiveExpiryAt` during transit or handover verification, it must fail with `410 DONATION_EXPIRED` and route to disposal.
+8. **Required Acceptance Timestamps**: Member 3 MUST set `claimedAt` when creating an acceptance; Member 4 MUST set `handoverVerifiedAt` and `completedAt` on an acceptance (the platform impact metrics depend directly on them).
 
 ---
 

@@ -119,12 +119,29 @@ To protect donor privacy and prevent food hijacking, exact location and contact 
   1. The posting donor (`donation.donorId === req.user.id`).
   2. An administrator (`req.user.role === 'admin'`).
   3. A recipient or delivery agent attached to an active acceptance on that donation.
-* **Public / Discovery View** (All other recipients and general feed):
-  * Coordinates: Truncated or omitted.
-  * Address: Only `address.city` and `address.formattedAddress` (neighborhood level), never street address.
+* **Public / Discovery View** (All unattached recipients, drivers, and general feed):
+  * Coordinates: Rounded to 2 decimal places (~1.1 km approximate radius).
+  * Address: Street address masked as `"[Hidden until acceptance]"`; only city and formatted neighborhood address shown.
   * Contact: Donor phone number is completely redacted (`null`).
-  * Relative Distance: Dynamically computed and returned as `distanceKm`.
-* `GET /api/v1/donations/:id` enforces these exact redaction rules based on `req.user`.
+  * Relative Distance: Dynamically computed strictly from the ROUNDED coordinates (never exact), rounded to 1 decimal place (`distanceKm`).
+* `GET /api/v1/donations/:id` and `GET /api/v1/donations/available` enforce these exact redaction rules based on `req.user`.
+
+### E. Standard Error Codes
+All failure responses follow the standard JSON error envelope (`success: false, error: { code, message, details }`). System error codes include:
+* `VALIDATION_ERROR` (400): Schema validation failure or malformed payload.
+* `CANNOT_DEACTIVATE_SELF` (400): Administrator attempted self-deactivation.
+* `UNAUTHORIZED` (401): Missing, malformed, or expired token.
+* `INVALID_CREDENTIALS` (401): Email or password mismatch.
+* `FORBIDDEN` (403): User role lacks permission.
+* `UNVERIFIED_ACCOUNT` (403): Recipient or driver pending admin verification.
+* `DEACTIVATED_ACCOUNT` (403): Account deactivated by administrator.
+* `NOT_FOUND` (404): Resource not found.
+* `CONFLICT` (409): Duplicate email or resource conflict.
+* `INVALID_STATUS_TRANSITION` (409): Illegal lifecycle transition or race conflict.
+* `INSUFFICIENT_QUANTITY` (409): Claimed quantity exceeds available balance.
+* `DONATION_EXPIRED` (410): Food exceeded safe consumption deadline (`effectiveExpiryAt`).
+* `FOOD_UNSAFE` (422): Food safety check failed; diverted to disposal.
+* `INTERNAL_SERVER_ERROR` (500): Server exception.
 
 ---
 
@@ -157,7 +174,9 @@ To protect donor privacy and prevent food hijacking, exact location and contact 
 | `/api/v1/pickups/:id/safety-check`| POST | ❌ | ❌ | ✅ | ✅ | ✅ | Driver / Recipient *(Member 4 stub)* |
 | `/api/v1/pickups/:id/verify-handover-qr`| POST| ❌ | ❌ | ✅ | ✅ | ✅ | Recipient / Driver *(Member 4 stub)* |
 | `/api/v1/ratings` | POST | ❌ | ✅ | ✅ | ❌ | ✅ | Decoupled; post-completion *(Member 4 stub)* |
-| `/api/v1/dashboard/impact` | GET | ✅ | ✅ | ✅ | ✅ | ✅ | Public aggregated statistics |
+| `/api/v1/dashboard/impact` | GET | ✅ | ✅ | ✅ | ✅ | ✅ | Public aggregated statistics (rate-limited, 60s cache) |
+| `/api/v1/dashboard/donor` | GET | ❌ | ✅ | ❌ | ❌ | ✅ | Donor only; personal donation metrics |
+| `/api/v1/dashboard/recipient` | GET | ❌ | ❌ | ✅ | ❌ | ✅ | Verified recipients only; demand & claims metrics |
 | `/api/v1/admin/users/:id/verify` | PATCH | ❌ | ❌ | ❌ | ❌ | ✅ | Admin only |
 | `/api/v1/admin/users/:id/deactivate` | PATCH | ❌ | ❌ | ❌ | ❌ | ✅ | Admin only |
 | `/api/v1/admin/donations` | GET | ❌ | ❌ | ❌ | ❌ | ✅ | Admin only |
@@ -178,9 +197,8 @@ To protect donor privacy and prevent food hijacking, exact location and contact 
   "message": "System operational",
   "data": {
     "status": "UP",
-    "timestamp": "2026-10-10T12:00:00.000Z",
-    "database": "CONNECTED",
-    "uptimeSeconds": 1420
+    "uptime": 1420,
+    "timestamp": "2026-10-10T12:00:00.000Z"
   }
 }
 ```
@@ -601,6 +619,127 @@ To protect donor privacy and prevent food hijacking, exact location and contact 
     "registeredRecipientsCount": 29
   }
 }
+#### 2. Donor Personal Dashboard
+* **Method & Path**: `GET /api/v1/dashboard/donor`
+* **Auth**: Bearer Token (`donor` or `admin`)
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Donor dashboard retrieved successfully",
+  "data": {
+    "countsPerStatus": {
+      "AVAILABLE": 1,
+      "PARTIALLY_ACCEPTED": 0,
+      "ACCEPTED": 0,
+      "PICKUP_SCHEDULED": 0,
+      "PICKED_UP": 0,
+      "HANDOVER_VERIFIED": 0,
+      "COMPLETED": 2,
+      "CANCELLED": 0,
+      "REOPENED": 0,
+      "EXPIRED": 0,
+      "REMATCHING": 0
+    },
+    "mealsContributed": 75.0,
+    "completionRate": 66.7,
+    "last5Donations": [
+      {
+        "id": "6707c91fb12345678901234b",
+        "foodName": "Fresh Vegetable Pulao",
+        "foodType": "cooked_meals",
+        "totalQuantity": 30,
+        "remainingQuantity": 0,
+        "unit": "plates",
+        "status": "COMPLETED",
+        "createdAt": "2026-10-10T12:00:00.000Z"
+      }
+    ],
+    "totalDonations": 3
+  }
+}
+```
+
+#### 3. Recipient Personal Dashboard
+* **Method & Path**: `GET /api/v1/dashboard/recipient`
+* **Auth**: Bearer Token (`recipient` with `isVerified === true`, or `admin`)
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Recipient dashboard retrieved successfully",
+  "data": {
+    "countsPerStatus": {
+      "OPEN": 2,
+      "PARTIALLY_FULFILLED": 0,
+      "FULFILLED": 1,
+      "EXPIRED": 0,
+      "CANCELLED": 0
+    },
+    "totalAcceptedQuantity": 40,
+    "completedMeals": 40.0,
+    "last5Acceptances": [
+      {
+        "_id": "6707d11ab12345678901234c",
+        "donationId": "6707c91fb12345678901234b",
+        "foodName": "Fresh Vegetable Pulao",
+        "foodType": "cooked_meals",
+        "unit": "plates",
+        "quantity": 20,
+        "status": "COMPLETED",
+        "pickupPreference": "self_pickup",
+        "claimedAt": "2026-10-10T12:15:00.000Z",
+        "handoverVerifiedAt": "2026-10-10T13:45:00.000Z",
+        "completedAt": "2026-10-10T13:50:00.000Z",
+        "donorName": "Grand Royal Banquet",
+        "address": {
+          "city": "Bengaluru",
+          "formattedAddress": "15 Residency Road, Bengaluru"
+        }
+      }
+    ]
+  }
+}
+```
+
+---
+
+### J. Administrator Management Endpoints (`Member 2`)
+
+#### 1. List All Platform Donations (Audit Feed)
+* **Method & Path**: `GET /api/v1/admin/donations`
+* **Auth**: Bearer Token (`admin` only)
+* **Query Params**: `?page=1&limit=10&status=AVAILABLE&donorId=6707c5...&foodType=cooked_meals&dateFrom=...&dateTo=...`
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Admin donations retrieved successfully",
+  "data": [
+    {
+      "id": "6707c91fb12345678901234b",
+      "foodName": "Fresh Vegetable Biryani",
+      "status": "AVAILABLE",
+      "totalQuantity": 50,
+      "remainingQuantity": 50,
+      "statusHistoryLength": 1,
+      "acceptanceCount": 0,
+      "secondsToEffectiveExpiry": 18000,
+      "urgencyLevel": "NORMAL",
+      "donorId": {
+        "name": "Grand Royal Banquet",
+        "email": "donor@royal.org",
+        "phone": "+919876543211"
+      }
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "total": 1,
+    "totalPages": 1
+  }
+}
 ```
 
 ---
@@ -676,6 +815,30 @@ To protect donor privacy and prevent food hijacking, exact location and contact 
 | `status` | `String` | Yes | `enum` of `ACCEPTANCE_STATUS`, default `'CLAIMED'` | Discrete claim status |
 | `pickupPreference` | `String` | No | `enum: ['self_pickup', 'delivery_agent_required']` | Logistics preference |
 | `claimedAt` | `Date` | Auto | Default `Date.now` | Claim timestamp |
+
+---
+
+### D. RecipientRequirement Schema (`models/RecipientRequirement.js` — Owned by Member 2)
+
+| Field Name | Type | Required | Validation / Constraints | Description |
+| :--- | :--- | :---: | :--- | :--- |
+| `recipientId` | `ObjectId` | Yes | `ref: 'User'` | Claiming recipient user ID |
+| `title` | `String` | Yes | min 3, max 120 chars | Title of the requirement |
+| `foodType` | `String` | Yes | `enum: ['cooked_meals', 'raw_groceries', 'packaged_food', 'bakery_items']` | Food category needed |
+| `quantityNeeded` | `Number` | Yes | min 1, integer | Number of units needed |
+| `quantityFulfilled` | `Number` | No | Default `0`, `<= quantityNeeded` | Number of units fulfilled so far |
+| `unit` | `String` | Yes | `enum: ['plates', 'kg', 'packets', 'servings']` | Measurement unit |
+| `dietaryPreference` | `String` | Yes | `enum: ['vegetarian', 'non_vegetarian', 'vegan']` | Dietary restriction |
+| `neededBy` | `Date` | Yes | Must be in the future (`> now`) | Time requirement must be met by |
+| `urgency` | `String` | Yes | `enum: ['LOW', 'NORMAL', 'HIGH', 'CRITICAL']` | Urgency priority level |
+| `status` | `String` | Yes | `enum: ['OPEN', 'PARTIALLY_FULFILLED', 'FULFILLED', 'EXPIRED', 'CANCELLED']`, default `'OPEN'` | Requirement lifecycle status |
+| `location` | `Object` | Yes | GeoJSON Point: `type: 'Point'`, `coordinates: [lng, lat]` | **2dsphere index** |
+| `address.street` | `String` | No | `trim` | Sensitive / street address |
+| `address.city` | `String` | Yes | `trim` | City |
+| `address.state` | `String` | No | `trim` | State |
+| `address.postalCode` | `String` | No | `trim` | Postal code |
+| `address.formattedAddress` | `String` | Yes | `trim` | Formatted address |
+| `createdAt` | `Date` | Auto | `timestamps: true` | |
 
 ---
 

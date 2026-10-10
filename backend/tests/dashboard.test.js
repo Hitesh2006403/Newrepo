@@ -75,8 +75,10 @@ describe('Dashboard Analytics & Impact Metrics (/api/v1/dashboard)', () => {
       expect(res.body.data.totalDonationsCompleted).toBeDefined();
       expect(res.body.data.activeDonationsCount).toBeDefined();
       expect(res.body.data.percentCompletedBeforeExpiry).toBeDefined();
-      expect(res.body.data.registeredDonors).toBeDefined();
-      expect(res.body.data.registeredRecipients).toBeDefined();
+      expect(res.body.data.registeredDonorsCount).toBeDefined();
+      expect(res.body.data.registeredRecipientsCount).toBeDefined();
+      expect(res.body.data.registeredDonors).toBeUndefined();
+      expect(res.body.data.registeredRecipients).toBeUndefined();
     });
 
     it('should accurately calculate mealsSaved, completion percentages, and average time to match on seeded data', async () => {
@@ -161,9 +163,31 @@ describe('Dashboard Analytics & Impact Metrics (/api/v1/dashboard)', () => {
       // Average: (10 + 5) / 2 = 7.5m
       expect(res.body.data.avgTimeToMatchMinutes).toBeCloseTo(7.5, 1);
 
-      // Registered users: 1 donor, 1 verified recipient (pending recipient excluded from registeredRecipients)
-      expect(res.body.data.registeredDonors).toBe(1);
-      expect(res.body.data.registeredRecipients).toBe(1);
+      // Registered users: 1 donor, 1 verified recipient (pending recipient excluded from registeredRecipientsCount)
+      expect(res.body.data.registeredDonorsCount).toBe(1);
+      expect(res.body.data.registeredRecipientsCount).toBe(1);
+      expect(res.body.data.registeredDonors).toBeUndefined();
+      expect(res.body.data.registeredRecipients).toBeUndefined();
+    });
+
+    it('should serve cached response within 60s when enabled outside test mode', async () => {
+      const dashboardController = require('../src/controllers/dashboardController');
+      const originalEnv = process.env.NODE_ENV;
+      try {
+        process.env.NODE_ENV = 'production';
+        // Seed mock cache
+        dashboardController._setImpactCache(
+          { mealsSaved: 9999, registeredDonorsCount: 42, registeredRecipientsCount: 24 },
+          Date.now()
+        );
+
+        const res = await request(app).get('/api/v1/dashboard/impact');
+        expect(res.status).toBe(200);
+        expect(res.body.data.mealsSaved).toBe(9999);
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+        dashboardController._setImpactCache(null, 0);
+      }
     });
   });
 

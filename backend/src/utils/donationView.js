@@ -99,16 +99,24 @@ const toDonationView = (donationDoc, viewer = null, viewerLocationOrDistance = n
       ratingCount: donorObj.ratingCount || 0,
       phone: canViewFullPII ? donorObj.phone : null,
     };
+    if (!canViewFullPII) {
+      donation.donorId.phone = null;
+    }
   }
 
   // Apply privacy redaction for general public / unattached viewers
   if (!canViewFullPII) {
     if (donation.address) {
+      const rawStreet = donation.address.street;
+      let safeFormattedAddress = donation.address.formattedAddress;
+      if (rawStreet && safeFormattedAddress && safeFormattedAddress.includes(rawStreet)) {
+        safeFormattedAddress = safeFormattedAddress.replace(rawStreet, '[Hidden until acceptance]').trim();
+      }
       donation.address = {
         city: donation.address.city,
         state: donation.address.state || null,
         postalCode: donation.address.postalCode || null,
-        formattedAddress: donation.address.formattedAddress,
+        formattedAddress: safeFormattedAddress,
         street: null, // Redacted
       };
     }

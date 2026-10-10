@@ -8,13 +8,29 @@ const ERROR_CODES = require('../constants/errorCodes');
  * SECURITY: Hides stack traces unless NODE_ENV === 'development'. Never logs secrets or passwords.
  */
 const errorHandler = (err, req, res, next) => {
-  let statusCode = err.statusCode || 500;
+  let statusCode = err.statusCode || err.status || 500;
   let errorCode = err.errorCode || ERROR_CODES.INTERNAL_SERVER_ERROR;
   let message = err.message || 'An unexpected error occurred on the server';
   let details = err.details || null;
 
-  // 1. Zod Schema Validation Error
-  if (err instanceof ZodError || err.name === 'ZodError') {
+  // 1. Body Parser Malformed JSON SyntaxError
+  if (err instanceof SyntaxError && (err.status === 400 || err.statusCode === 400) && 'body' in err) {
+    statusCode = 400;
+    errorCode = ERROR_CODES.VALIDATION_ERROR;
+    message = 'Malformed JSON payload in request body';
+    details = [{ field: 'body', issue: 'Invalid JSON syntax' }];
+  }
+
+  // 2. Body Parser Payload Too Large (exceeds 10kb limit)
+  else if (err.type === 'entity.too.large' || err.status === 413 || err.statusCode === 413) {
+    statusCode = 413;
+    errorCode = ERROR_CODES.PAYLOAD_TOO_LARGE;
+    message = 'Request payload exceeds 10kb size limit';
+    details = [{ field: 'body', issue: 'Payload exceeds maximum allowed size' }];
+  }
+
+  // 3. Zod Schema Validation Error
+  else if (err instanceof ZodError || err.name === 'ZodError') {
     statusCode = 400;
     errorCode = ERROR_CODES.VALIDATION_ERROR;
     message = 'Validation failed';

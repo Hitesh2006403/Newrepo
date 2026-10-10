@@ -7,12 +7,22 @@ const { DONATION_STATUS, REQUIREMENT_STATUS } = require('../constants/status');
 const { ROLES } = require('../constants/roles');
 const { toDonationView } = require('../utils/donationView');
 
+// In-memory cache for public impact stats (60s TTL)
+let impactCache = null;
+let lastCacheTime = 0;
+const CACHE_TTL_MS = 60 * 1000;
+
 /**
  * GET /api/v1/dashboard/impact
  * Public platform impact metrics.
  * Strictly anonymous with zero PII (no names, phones, or emails).
+ * Rate-limited and cached for 60 seconds (cache disabled in test).
  */
 const getPublicImpact = asyncHandler(async (req, res) => {
+  const currentTime = Date.now();
+  if (process.env.NODE_ENV !== 'test' && impactCache && (currentTime - lastCacheTime < CACHE_TTL_MS)) {
+    return ApiResponse.send(res, 200, 'Impact statistics retrieved successfully', impactCache);
+  }
   // 1. Total meals saved across all completed acceptances
   const mealsAgg = await Donation.aggregate([
     { $unwind: '$acceptances' },
@@ -150,18 +160,23 @@ const getPublicImpact = asyncHandler(async (req, res) => {
     User.countDocuments({ role: ROLES.RECIPIENT, isVerified: true }),
   ]);
 
-  return ApiResponse.send(res, 200, 'Impact statistics retrieved successfully', {
+  const responseData = {
     mealsSaved,
-    totalDonationsCompleted,
-    activeDonationsCount,
     percentCompletedBeforeExpiry,
     avgTimeToMatchMinutes,
-    registeredDonors,
-    registeredRecipients,
+    totalDonationsPosted,
+    totalDonationsCompleted,
+    activeDonationsCount,
     registeredDonorsCount: registeredDonors,
     registeredRecipientsCount: registeredRecipients,
-    totalDonationsPosted,
-  });
+  };
+
+  if (process.env.NODE_ENV !== 'test') {
+    impactCache = responseData;
+    lastCacheTime = currentTime;
+  }
+
+  return ApiResponse.send(res, 200, 'Impact statistics retrieved successfully', responseData);
 });
 
 /**
@@ -349,4 +364,9 @@ module.exports = {
   getPublicImpact,
   getDonorDashboard,
   getRecipientDashboard,
+  _getImpactCache: () => impactCache,
+  _setImpactCache: (cache, time) => {
+    impactCache = cache;
+    lastCacheTime = time;
+  },
 };

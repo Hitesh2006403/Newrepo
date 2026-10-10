@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 
+const querySanitizer = require('./src/middlewares/querySanitizer');
 const apiRouter = require('./src/routes/index');
 const notFoundHandler = require('./src/middlewares/notFoundHandler');
 const errorHandler = require('./src/middlewares/errorHandler');
@@ -12,9 +13,15 @@ const app = express();
 // 1. Security Headers
 app.use(helmet());
 
-// 2. Cross-Origin Resource Sharing (whitelisted to frontend CLIENT_URL)
+// 2. Cross-Origin Resource Sharing (whitelisted strictly to frontend CLIENT_URL)
+const allowedOrigin = process.env.CLIENT_URL || 'http://localhost:5173';
 const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    if (!origin || origin === allowedOrigin) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
   credentials: true,
   optionsSuccessStatus: 200,
 };
@@ -29,7 +36,10 @@ if (process.env.NODE_ENV !== 'test') {
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
-// 5. Mount API Routes
+// 5. Query Parameter Sanitization (NoSQL injection guard)
+app.use(querySanitizer);
+
+// 6. Mount API Routes
 app.use('/api/v1', apiRouter);
 
 // 6. 404 Route Catch-All
