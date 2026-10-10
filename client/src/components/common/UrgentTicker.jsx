@@ -22,8 +22,8 @@ export const UrgentTicker = () => {
   const topUrgent = urgentItems[0];
 
   return (
-    <div className="bg-gradient-to-r from-rose-700 via-rose-600 to-amber-600 text-white px-4 py-2 text-xs sm:text-sm font-medium shadow-md">
-      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+    <div className="bg-gradient-to-r from-rose-700 via-rose-600 to-amber-600 text-white px-4 py-2.5 text-xs sm:text-sm font-medium shadow-md">
+      <div className="max-w-[1680px] w-full mx-auto flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2.5 flex-1 min-w-[280px]">
           <span className="flex items-center gap-1 bg-white/20 text-white font-bold text-[11px] px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 animate-pulse">
             <Flame className="w-3.5 h-3.5 text-amber-300" />
