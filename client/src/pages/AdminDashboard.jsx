@@ -4,6 +4,7 @@ import { MetricsGrid } from '../components/admin/MetricsCard';
 import { DonationMonitorTable } from '../components/admin/DonationMonitorTable';
 import { QrCodeModal } from '../components/common/QrCodeModal';
 import { ReopenModal } from '../components/donor/ReopenModal';
+import { VerifiedTelemetryPanel } from '../components/admin/VerifiedTelemetryPanel';
 import {
   ShieldAlert,
   AlertTriangle,
@@ -11,6 +12,7 @@ import {
   CheckCircle,
   Clock,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const AdminDashboard = () => {
@@ -26,7 +28,7 @@ export const AdminDashboard = () => {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Admin Operations Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-stone-900 to-rose-950 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-lg border border-slate-800">
         <div className="relative z-10 max-w-2xl space-y-3">
@@ -35,10 +37,10 @@ export const AdminDashboard = () => {
             <span>Central Operations & Impact Command</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Platform Health, Match Velocity & Impact
+            Platform Health, Match Velocity & Handover Telemetry
           </h2>
           <p className="text-sm text-slate-300 leading-relaxed">
-            Real-time telemetry across donor kitchens, partner shelters, and rapid delivery riders. Track live food rescue KPIs and prevent wastage bottlenecks.
+            Real-time telemetry across donor kitchens, partner shelters, and rapid delivery riders. Audit verified served and received quantities with zero variance.
           </p>
         </div>
       </div>
@@ -76,6 +78,9 @@ export const AdminDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* VERIFIED SERVED & RECEIVED AUDIT TELEMETRY (NEW FEATURE) */}
+      <VerifiedTelemetryPanel />
 
       {/* High-Level Impact Metrics Grid */}
       <div className="space-y-3">

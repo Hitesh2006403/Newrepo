@@ -11,6 +11,7 @@ import { RecipientDashboard } from './pages/RecipientDashboard';
 import { DeliveryDashboard } from './pages/DeliveryDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AuthModal } from './pages/AuthPage';
+import { LoginPage } from './pages/LoginPage';
 import {
   HeartHandshake,
   ShieldCheck,
@@ -25,6 +26,16 @@ function DashboardRouter() {
   const [isCreateDonationOpen, setIsCreateDonationOpen] = useState(false);
   const [isPostReqOpen, setIsPostReqOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isLoginPageVisible, setIsLoginPageVisible] = useState(false);
+
+  if (isLoginPageVisible) {
+    return (
+      <LoginPage
+        onLoginSuccess={() => setIsLoginPageVisible(false)}
+        onContinueAsGuest={() => setIsLoginPageVisible(false)}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
@@ -36,6 +47,7 @@ function DashboardRouter() {
         onOpenCreateDonation={() => setIsCreateDonationOpen(true)}
         onOpenPostRequirement={() => setIsPostReqOpen(true)}
         onOpenAuth={() => setIsAuthModalOpen(true)}
+        onOpenLogin={() => setIsLoginPageVisible(true)}
       />
 
       {/* Main Application Content Body */}
@@ -77,10 +89,10 @@ function DashboardRouter() {
             </span>
             <span>•</span>
             <button
-              onClick={() => setIsAuthModalOpen(true)}
+              onClick={() => setIsLoginPageVisible(true)}
               className="text-rose-600 font-bold hover:underline"
             >
-              Partner Switch
+              Switch Member / Sign In
             </button>
           </div>
         </div>

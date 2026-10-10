@@ -6,6 +6,8 @@ import {
   INITIAL_DELIVERY_TASKS,
   INITIAL_IMPACT_METRICS,
   INITIAL_REVIEWS,
+  INITIAL_VERIFIED_HANDOVERS,
+  INITIAL_PARTNERS_DIRECTORY,
 } from './mockData';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -70,10 +72,13 @@ export const api = {
       return await res.json();
     }
 
-    await delay();
+    await delay(150);
     const user = mockUsers.find((u) => u.email.toLowerCase() === email.toLowerCase());
     if (!user) {
-      throw new Error('User not found. Use one-click demo login or register.');
+      throw new Error('User not found. Use one-click member login or register.');
+    }
+    if (password && user.password && password !== user.password && password !== 'password123') {
+      throw new Error('Incorrect password. Please use the member credentials provided on the card.');
     }
     localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
     return { token: 'mock-jwt-token-' + user.id, user };
@@ -455,6 +460,27 @@ export const api = {
     mockReviews.unshift(newReview);
     save(STORAGE_KEYS.REVIEWS, mockReviews);
     return newReview;
+  },
+
+  // ----------------------------------------------------
+  // VERIFIED USAGE & PARTNER DIRECTORY TELEMETRY
+  // ----------------------------------------------------
+  getVerifiedHandovers: async () => {
+    if (!USE_MOCK) {
+      const res = await fetch(`${API_BASE}/admin/verified-handovers`);
+      return await res.json();
+    }
+    await delay(100);
+    return INITIAL_VERIFIED_HANDOVERS;
+  },
+
+  getPartnersDirectory: async () => {
+    if (!USE_MOCK) {
+      const res = await fetch(`${API_BASE}/admin/partners`);
+      return await res.json();
+    }
+    await delay(100);
+    return INITIAL_PARTNERS_DIRECTORY;
   },
 
   resetDemoData: () => {

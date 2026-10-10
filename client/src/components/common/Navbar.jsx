@@ -10,10 +10,11 @@ import {
   RotateCcw,
   Sparkles,
   ShieldCheck,
+  UserCheck,
 } from 'lucide-react';
 import { api } from '../../services/api';
 
-export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement }) => {
+export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenLogin }) => {
   const { currentUser, role, switchRole } = useAuth();
   const { impactMetrics } = useDonations();
 
@@ -133,6 +134,16 @@ export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement }) => {
                 <span>+ Post Requirement</span>
               </button>
             )}
+
+            {/* Member Login & Credentials Portal */}
+            <button
+              onClick={onOpenLogin}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200/80 border border-slate-200 text-slate-800 text-xs font-bold transition shadow-2xs"
+              title="Sign in with 4 Member Credentials (Donor, Recipient, Delivery, Admin)"
+            >
+              <UserCheck className="w-4 h-4 text-rose-600" />
+              <span className="hidden sm:inline">Member Login</span>
+            </button>
 
             {/* Reset Demo button for quick re-testing */}
             <button
