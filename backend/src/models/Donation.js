@@ -181,6 +181,26 @@ const DonationSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    venueType: {
+      type: String,
+      trim: true,
+      default: 'Others',
+    },
+    foodSafetyDeclaration: {
+      hygienicallyPrepared: { type: Boolean, default: true },
+      temperatureMaintained: { type: Boolean, default: true },
+      sealedPackaging: { type: Boolean, default: true },
+      allergenNotes: { type: String, default: 'None declared' },
+    },
+    matchedRecipients: [
+      {
+        recipientId: { type: String },
+        recipientName: { type: String },
+        claimedQuantity: { type: Number },
+        claimedAt: { type: Date, default: Date.now },
+        notes: { type: String },
+      },
+    ],
     status: {
       type: String,
       enum: {

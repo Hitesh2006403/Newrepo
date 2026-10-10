@@ -4,6 +4,8 @@ const User = require('../src/models/User');
 const Donation = require('../src/models/Donation');
 const RecipientRequirement = require('../src/models/RecipientRequirement');
 const Notification = require('../src/models/Notification');
+const Review = require('../src/models/Review');
+const DeliveryTask = require('../src/models/DeliveryTask');
 const { ROLES } = require('../src/constants/roles');
 const { DONATION_STATUS, ACCEPTANCE_STATUS, REQUIREMENT_STATUS } = require('../src/constants/status');
 
@@ -520,7 +522,126 @@ const runDemoSeed = async () => {
     }
 
     // =========================================================================
-    // 5. SUMMARY OUTPUT TABLE
+    // 5. COMMUNITY REVIEWS & FEEDBACK
+    // =========================================================================
+    const reviewDefinitions = [
+      {
+        donationId: 'don-105',
+        donorName: 'Grand Hyatt Banquet & Bistro',
+        recipientName: 'Mother Teresa Home for Aged',
+        authorRole: 'recipient',
+        rating: 5,
+        foodName: 'Catered Wedding Dinner: Biryani, Dal Makhani & Roti',
+        comment: 'Extremely high quality food, hot and delicious. Fed 150 elderly residents seamlessly. Blessings to the culinary team for zero wastage!',
+        tags: ['Fresh & Hot', 'Punctual Handover', 'Hygienically Packed'],
+        verifiedRescue: true,
+      },
+      {
+        donationId: 'don-102',
+        donorName: 'Artisan Sourdough & Bakery Guild',
+        recipientName: 'Asha Bhavan Community Kitchen',
+        authorRole: 'recipient',
+        rating: 5,
+        foodName: 'Fresh Baked Multigrain Loaves, Brioche & Croissants',
+        comment: 'Wonderful bakery rescue! Packaged cleanly with clear allergen notices. Children and volunteers loved the fresh brioche buns.',
+        tags: ['Sealed Packaging', 'Accurate Labeling', 'Quick Response'],
+        verifiedRescue: true,
+      },
+      {
+        donationId: 'don-103',
+        donorName: 'Infosys Food Court 4',
+        recipientName: 'Grace Hope Children Shelter',
+        authorRole: 'recipient',
+        rating: 4.8,
+        foodName: 'Nutritious South Indian Meal: Sambar, Rice & Poriyal',
+        comment: 'Great quantity and well-balanced nutrition. Handover rider Vikram was very polite and handled the insulated hot box safely.',
+        tags: ['Nutritious Meals', 'Safe Transit', 'Polite Rider'],
+        verifiedRescue: true,
+      },
+    ];
+
+    for (const rDef of reviewDefinitions) {
+      const existing = await Review.findOne({ donorName: rDef.donorName, foodName: rDef.foodName });
+      if (!existing) {
+        await Review.create(rDef);
+        console.log(`  [+] Created review: "${rDef.foodName}"`);
+      } else {
+        console.log(`  [=] Reused review:  "${rDef.foodName}"`);
+      }
+    }
+
+    // =========================================================================
+    // 6. DELIVERY FLEET TASKS
+    // =========================================================================
+    const deliveryTaskDefinitions = [
+      {
+        donationId: 'don-103',
+        deliveryAgentId: driver1?.email || 'agent@delivery.com',
+        foodName: 'Nutritious South Indian Meal: Sambar, Rice, Poriyal & Curd',
+        quantity: '120 servings',
+        foodType: 'cooked_meals',
+        storageCondition: 'heated (Thermal Insulated)',
+        urgencyLevel: 'URGENT',
+        pickup: {
+          location: 'Infosys Food Court 4, Dock B, Electronic City',
+          donorName: 'Infosys Food Court 4',
+          donorPhone: '+91 97711 22334',
+          deadline: new Date(Date.now() + 1.5 * 60 * 60 * 1000),
+        },
+        dropoff: {
+          location: 'Grace Hope Children Shelter, 14 Sunshine Cross',
+          recipientName: 'Grace Hope Children Shelter (Sister Teresa)',
+          recipientPhone: '+91 91234 56789',
+          deadline: new Date(Date.now() + 2.5 * 60 * 60 * 1000),
+        },
+        currentMilestone: 'ASSIGNED',
+        distanceTotalKm: 5.8,
+        estimatedMinutes: 28,
+        qrRequiredToken: 'SAP-QR-DON-103-SECURE-8831',
+        vehicleSuggestion: 'Thermal container insulated bag required',
+        safetyChecklistCompleted: false,
+      },
+      {
+        donationId: 'don-101',
+        deliveryAgentId: driver1?.email || 'agent@delivery.com',
+        foodName: 'Executive Buffet: Basmati Rice & Paneer Butter Masala',
+        quantity: '35 servings (Partial claim)',
+        foodType: 'cooked_meals',
+        storageCondition: 'heated',
+        urgencyLevel: 'HIGH',
+        pickup: {
+          location: 'Hyatt Regency Service Bay, MG Road',
+          donorName: 'Chef Marco Rossi',
+          donorPhone: '+91 98765 43210',
+          deadline: new Date(Date.now() + 1.8 * 60 * 60 * 1000),
+        },
+        dropoff: {
+          location: 'Grace Hope Children Shelter, 14 Sunshine Cross',
+          recipientName: 'Grace Hope Children Shelter',
+          recipientPhone: '+91 91234 56789',
+          deadline: new Date(Date.now() + 2.3 * 60 * 60 * 1000),
+        },
+        currentMilestone: 'EN_ROUTE_PICKUP',
+        distanceTotalKm: 2.2,
+        estimatedMinutes: 12,
+        qrRequiredToken: 'SAP-QR-DON-101-SECURE-9921',
+        vehicleSuggestion: 'Hot box or two insulated delivery crates',
+        safetyChecklistCompleted: false,
+      },
+    ];
+
+    for (const tDef of deliveryTaskDefinitions) {
+      const existing = await DeliveryTask.findOne({ donationId: tDef.donationId });
+      if (!existing) {
+        await DeliveryTask.create(tDef);
+        console.log(`  [+] Created delivery task: "${tDef.foodName}"`);
+      } else {
+        console.log(`  [=] Reused delivery task:  "${tDef.foodName}"`);
+      }
+    }
+
+    // =========================================================================
+    // 7. SUMMARY OUTPUT TABLE
     // =========================================================================
     console.log('\n=============================================================================');
     console.log('       SHARE A PLATE — BENGALURU DEMO ENVIRONMENT READY');
@@ -540,6 +661,8 @@ const runDemoSeed = async () => {
     console.log('  • Donations:     8 total (2 Urgent <30m, 2 Normal Available, 1 Partial, 1 Accepted, 1 Cancelled, 1 Expired)');
     console.log('  • Requirements:  4 total (across orphanages & relief NGOs)');
     console.log('  • Notifications: 4 in-app alerts created across accounts');
+    console.log('  • Reviews:       3 community feedback records');
+    console.log('  • DeliveryTasks: 2 active fleet dispatch assignments');
     console.log('\n[Demo Seed] Done! Database populated safely.\n');
 
     await closeDB();

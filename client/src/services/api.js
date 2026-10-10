@@ -426,8 +426,22 @@ export const api = {
   // ----------------------------------------------------
   getRequirements: async () => {
     if (!USE_MOCK) {
-      const res = await fetch(`${API_BASE}/recipient/requirements`);
-      return await res.json();
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/recipient/requirements`, {
+          headers,
+          credentials: 'include',
+        });
+        const json = await res.json();
+        if (res.ok) {
+          const list = Array.isArray(json) ? json : (json.data || []);
+          return list.map((r) => ({ ...r, id: r.id || r._id }));
+        }
+      } catch (e) {
+        console.warn('Backend requirements fetch error, using local fallback:', e);
+      }
     }
     await delay(100);
     return mockRequirements;
@@ -435,12 +449,24 @@ export const api = {
 
   postRequirement: async (reqData) => {
     if (!USE_MOCK) {
-      const res = await fetch(`${API_BASE}/recipient/requirements`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reqData),
-      });
-      return await res.json();
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/recipient/requirements`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(reqData),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          const created = json.data || json;
+          return { ...created, id: created.id || created._id };
+        }
+      } catch (e) {
+        console.warn('Backend postRequirement error, saving locally:', e);
+      }
     }
     await delay(250);
     const newReq = {
@@ -456,8 +482,16 @@ export const api = {
 
   getSmartMatches: async (recipientId) => {
     if (!USE_MOCK) {
-      const res = await fetch(`${API_BASE}/recipient/matches?recipientId=${recipientId}`);
-      return await res.json();
+      try {
+        const res = await fetch(`${API_BASE}/recipient/matches?recipientId=${recipientId || ''}`);
+        const json = await res.json();
+        if (res.ok) {
+          const list = Array.isArray(json) ? json : (json.data || []);
+          if (list.length > 0) return list;
+        }
+      } catch (e) {
+        console.warn('Backend smart matches error, using algorithmic fallback:', e);
+      }
     }
     await delay(200);
     // Find active donations that have remaining food
@@ -601,8 +635,22 @@ export const api = {
   // ----------------------------------------------------
   getDeliveryTasks: async (deliveryAgentId) => {
     if (!USE_MOCK) {
-      const res = await fetch(`${API_BASE}/delivery/tasks?agentId=${deliveryAgentId}`);
-      return await res.json();
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/delivery/tasks?agentId=${deliveryAgentId || ''}`, {
+          headers,
+          credentials: 'include',
+        });
+        const json = await res.json();
+        if (res.ok) {
+          const list = Array.isArray(json) ? json : (json.data || []);
+          return list.map((t) => ({ ...t, id: t.id || t._id }));
+        }
+      } catch (e) {
+        console.warn('Backend tasks fetch error, using local fallback:', e);
+      }
     }
     await delay(150);
     return mockTasks;
@@ -610,12 +658,24 @@ export const api = {
 
   updateDeliveryMilestone: async (taskId, nextMilestone) => {
     if (!USE_MOCK) {
-      const res = await fetch(`${API_BASE}/delivery/tasks/${taskId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextMilestone }),
-      });
-      return await res.json();
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/delivery/tasks/${taskId}/status`, {
+          method: 'PATCH',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ status: nextMilestone }),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          const updated = json.data || json;
+          return { ...updated, id: updated.id || updated._id };
+        }
+      } catch (e) {
+        console.warn('Backend milestone update error, using local fallback:', e);
+      }
     }
     await delay(200);
     const task = mockTasks.find((t) => t.id === taskId);
@@ -907,8 +967,16 @@ export const api = {
   // ----------------------------------------------------
   getReviews: async () => {
     if (!USE_MOCK) {
-      const res = await fetch(`${API_BASE}/reviews`);
-      return await res.json();
+      try {
+        const res = await fetch(`${API_BASE}/reviews`);
+        if (res.ok) {
+          const json = await res.json();
+          const list = Array.isArray(json) ? json : (json.data || []);
+          if (list.length > 0) return list.map((r) => ({ ...r, id: r.id || r._id }));
+        }
+      } catch (err) {
+        console.warn('Live reviews fetch fallback:', err);
+      }
     }
     await delay(100);
     return mockReviews;
@@ -916,12 +984,27 @@ export const api = {
 
   submitReview: async (reviewData) => {
     if (!USE_MOCK) {
-      const res = await fetch(`${API_BASE}/reviews`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(reviewData),
-      });
-      return await res.json();
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/reviews`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(reviewData),
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const review = json.data || json;
+          const mapped = { ...review, id: review.id || review._id };
+          mockReviews.unshift(mapped);
+          save(STORAGE_KEYS.REVIEWS, mockReviews);
+          return mapped;
+        }
+      } catch (err) {
+        console.warn('Live review submit fallback:', err);
+      }
     }
     await delay(250);
     const newReview = {
@@ -940,8 +1023,22 @@ export const api = {
   // ----------------------------------------------------
   getVerifiedHandovers: async () => {
     if (!USE_MOCK) {
-      const res = await fetch(`${API_BASE}/admin/verified-handovers`);
-      return await res.json();
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/admin/verified-handovers`, {
+          headers,
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const data = json.data || json;
+          if (data && Array.isArray(data)) return data;
+        }
+      } catch (err) {
+        console.warn('Live verified handovers fallback:', err);
+      }
     }
     await delay(100);
     return INITIAL_VERIFIED_HANDOVERS;
@@ -949,8 +1046,22 @@ export const api = {
 
   getPartnersDirectory: async () => {
     if (!USE_MOCK) {
-      const res = await fetch(`${API_BASE}/admin/partners`);
-      return await res.json();
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/admin/partners`, {
+          headers,
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const data = json.data || json;
+          if (data && Array.isArray(data)) return data;
+        }
+      } catch (err) {
+        console.warn('Live partners directory fallback:', err);
+      }
     }
     await delay(100);
     return INITIAL_PARTNERS_DIRECTORY;

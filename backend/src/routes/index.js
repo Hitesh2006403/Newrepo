@@ -7,6 +7,9 @@ const requirementRoutes = require('./requirementRoutes');
 const dashboardRoutes = require('./dashboardRoutes');
 const notificationRoutes = require('./notificationRoutes');
 const handoverRoutes = require('./handoverRoutes');
+const reviewRoutes = require('./reviewRoutes');
+const deliveryRoutes = require('./deliveryRoutes');
+const recipientRoutes = require('./recipientRoutes');
 
 const router = express.Router();
 
@@ -69,6 +72,15 @@ router.use('/notifications', notificationRoutes);
 
 // Secure QR Code Handover System (/api/v1/handover)
 router.use('/handover', handoverRoutes);
+
+// Community Reviews & Feedback (/api/v1/reviews)
+router.use('/reviews', reviewRoutes);
+
+// Delivery Fleet Logistics & Tasks (/api/v1/delivery)
+router.use('/delivery', deliveryRoutes);
+
+// Recipient Portal Requirements & Smart Matches (/api/v1/recipient)
+router.use('/recipient', recipientRoutes);
 
 // Test harness verification route (active strictly in test environment)
 if (process.env.NODE_ENV === 'test') {

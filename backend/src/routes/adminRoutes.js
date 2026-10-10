@@ -14,5 +14,7 @@ router.get('/users', adminUserController.listUsers);
 router.patch('/users/:id/verify', adminUserController.verifyUser);
 router.patch('/users/:id/deactivate', adminUserController.deactivateUser);
 router.get('/donations', adminUserController.listAdminDonations);
+router.get('/verified-handovers', adminUserController.getVerifiedHandovers);
+router.get('/partners', adminUserController.getPartnersDirectory);
 
 module.exports = router;
