@@ -225,6 +225,49 @@ describe('Authentication & Session Management (/api/v1/auth)', () => {
       expect(res.body.success).toBe(true);
     });
 
+    it('should reject an expired token with 401 UNAUTHORIZED', async () => {
+      const jwt = require('jsonwebtoken');
+      const expiredToken = jwt.sign(
+        { id: userId.toString() },
+        process.env.JWT_SECRET,
+        { algorithm: 'HS256', expiresIn: '-1s' }
+      );
+
+      const res = await request(app)
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${expiredToken}`);
+
+      expect(res.status).toBe(401);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe(ERROR_CODES.UNAUTHORIZED);
+    });
+
+    it('should prevent deactivated user from logging in at /auth/login with 403 DEACTIVATED_ACCOUNT', async () => {
+      // Deactivate user in DB
+      await User.findByIdAndUpdate(userId, { isActive: false });
+
+      const res = await request(app).post('/api/v1/auth/login').send({
+        email: validUserPayload.email,
+        password: validUserPayload.password,
+      });
+
+      expect(res.status).toBe(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe(ERROR_CODES.DEACTIVATED_ACCOUNT);
+    });
+
+    it('should judge user permissions by current DB role rather than any token claims', async () => {
+      // Initially, user is recipient. Change role in DB to donor.
+      await User.findByIdAndUpdate(userId, { role: ROLES.DONOR });
+
+      const res = await request(app)
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${validToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.user.role).toBe(ROLES.DONOR);
+    });
+
     it('should acknowledge logout with 200 OK', async () => {
       const res = await request(app)
         .post('/api/v1/auth/logout')

@@ -2,6 +2,9 @@ const express = require('express');
 const ApiResponse = require('../utils/ApiResponse');
 const authRoutes = require('./authRoutes');
 const adminRoutes = require('./adminRoutes');
+const donationRoutes = require('./donationRoutes');
+const requirementRoutes = require('./requirementRoutes');
+const dashboardRoutes = require('./dashboardRoutes');
 
 const router = express.Router();
 
@@ -24,7 +27,16 @@ router.use('/auth', authRoutes);
 // Administrator management routes (/api/v1/admin)
 router.use('/admin', adminRoutes);
 
-// Test harness verification route (active only in test environment)
+// Surplus food donation routes (/api/v1/donations)
+router.use('/donations', donationRoutes);
+
+// Recipient requirements / demand routes (/api/v1/requirements)
+router.use('/requirements', requirementRoutes);
+
+// Dashboards and platform analytics (/api/v1/dashboard)
+router.use('/dashboard', dashboardRoutes);
+
+// Test harness verification route (active strictly in test environment)
 if (process.env.NODE_ENV === 'test') {
   const { protect } = require('../middlewares/authMiddleware');
   const requireVerified = require('../middlewares/verificationMiddleware');

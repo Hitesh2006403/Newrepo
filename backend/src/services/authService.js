@@ -27,18 +27,22 @@ const DUMMY_HASH = bcrypt.hashSync('dummy_timing_defense_seed_password', 10);
  */
 const generateToken = (userId) => {
   return jwt.sign({ id: userId.toString() }, JWT_SECRET, {
+    algorithm: 'HS256',
     expiresIn: JWT_EXPIRES_IN,
   });
 };
 
 /**
  * Verifies and decodes a JWT Bearer token.
+ * SECURITY: Pins algorithms to HS256 to prevent algorithm confusion attacks.
  *
  * @param {string} token - Raw JWT string
  * @returns {Object} Decoded payload ({ id, iat, exp })
  */
 const verifyToken = (token) => {
-  return jwt.verify(token, JWT_SECRET);
+  return jwt.verify(token, JWT_SECRET, {
+    algorithms: ['HS256'],
+  });
 };
 
 /**

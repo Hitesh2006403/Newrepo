@@ -1,7 +1,9 @@
 const request = require('supertest');
 const app = require('../app');
 const User = require('../src/models/User');
+const Donation = require('../src/models/Donation');
 const { ROLES } = require('../src/constants/roles');
+const { DONATION_STATUS } = require('../src/constants/status');
 const ERROR_CODES = require('../src/constants/errorCodes');
 const authService = require('../src/services/authService');
 
@@ -133,6 +135,74 @@ describe('Administrator User Governance (/api/v1/admin)', () => {
       // Verify admin remains active in DB
       const adminInDb = await User.findById(adminUser._id);
       expect(adminInDb.isActive).toBe(true);
+    });
+  });
+
+  describe('GET /api/v1/admin/donations', () => {
+    let donorUser;
+
+    beforeEach(async () => {
+      donorUser = await User.create({
+        name: 'Donation Partner',
+        email: 'partner@donor.org',
+        password: 'Password123!',
+        role: ROLES.DONOR,
+        phone: '+919777777777',
+        isVerified: true,
+        isActive: true,
+        location: { type: 'Point', coordinates: [77.59, 12.97] },
+        address: { city: 'Bengaluru', formattedAddress: 'Koramangala' },
+      });
+
+      const now = new Date();
+      await Donation.create({
+        donorId: donorUser._id,
+        foodName: 'Admin Test Meals',
+        foodType: 'cooked_meals',
+        dietaryType: 'vegetarian',
+        totalQuantity: 50,
+        remainingQuantity: 50,
+        unit: 'plates',
+        cookedAt: new Date(now.getTime() - 3600000),
+        expiryAt: new Date(now.getTime() + 18000000),
+        safetyBufferMinutes: 60,
+        pickupWindowStart: now,
+        pickupWindowEnd: new Date(now.getTime() + 14400000),
+        location: { type: 'Point', coordinates: [77.59, 12.97] },
+        address: { city: 'Bengaluru', formattedAddress: 'Koramangala' },
+        status: DONATION_STATUS.AVAILABLE,
+        statusHistory: [
+          { status: DONATION_STATUS.AVAILABLE, note: 'Initial post' },
+        ],
+      });
+    });
+
+    it('should block non-admins from accessing GET /api/v1/admin/donations with 403 FORBIDDEN', async () => {
+      const res = await request(app)
+        .get('/api/v1/admin/donations')
+        .set('Authorization', `Bearer ${recipientToken}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe(ERROR_CODES.FORBIDDEN);
+    });
+
+    it('should return paginated donations with statusHistoryLength, acceptanceCount, and secondsToEffectiveExpiry for admin', async () => {
+      const res = await request(app)
+        .get('/api/v1/admin/donations?page=1&limit=10&status=AVAILABLE')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBe(1);
+
+      const item = res.body.data[0];
+      expect(item.foodName).toBe('Admin Test Meals');
+      expect(item.statusHistoryLength).toBe(1);
+      expect(item.acceptanceCount).toBe(0);
+      expect(item.secondsToEffectiveExpiry).toBeGreaterThan(0);
+      expect(item.donorId).toBeDefined();
+      expect(item.donorId.name).toBe('Donation Partner');
     });
   });
 });

@@ -13,5 +13,6 @@ router.use(authorizeRoles(ROLES.ADMIN));
 router.get('/users', adminUserController.listUsers);
 router.patch('/users/:id/verify', adminUserController.verifyUser);
 router.patch('/users/:id/deactivate', adminUserController.deactivateUser);
+router.get('/donations', adminUserController.listAdminDonations);
 
 module.exports = router;

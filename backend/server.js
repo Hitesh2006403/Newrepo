@@ -1,14 +1,17 @@
 require('dotenv').config();
 const app = require('./app');
 const { connectDB, closeDB } = require('./src/config/db');
+const { startExpirySweeper } = require('./src/services/expirySweeper');
 
 const PORT = process.env.PORT || 5000;
 
 let server;
+let sweeperInterval;
 
 const startServer = async () => {
   try {
     await connectDB();
+    sweeperInterval = startExpirySweeper(300000); // 5 minutes
     server = app.listen(PORT, () => {
       console.log(
         `[Server] Share A Plate API listening in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`
