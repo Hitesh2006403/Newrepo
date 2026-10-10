@@ -32,7 +32,28 @@ const loadOrInit = (key, initial) => {
       localStorage.setItem(key, JSON.stringify(initial));
       return initial;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (key === STORAGE_KEYS.DONATIONS && Array.isArray(parsed)) {
+      const existingIds = new Set(parsed.map((d) => d.id));
+      const enriched = parsed.map((d) => {
+        if (!d.venueType) {
+          const match = initial.find((init) => init.id === d.id);
+          if (match?.venueType) return { ...d, venueType: match.venueType };
+          const text = `${d.donorName || ''} ${d.foodName || ''}`.toLowerCase();
+          if (/hotel|hyatt|sheraton/i.test(text)) return { ...d, venueType: 'HOTELS' };
+          if (/restaurant|resturant|bistro|bakery/i.test(text)) return { ...d, venueType: 'Resturant' };
+          if (/catering|event|venue|pavilion/i.test(text)) return { ...d, venueType: 'Event venue' };
+          return { ...d, venueType: 'Others' };
+        }
+        return d;
+      });
+      for (const item of initial) {
+        if (!existingIds.has(item.id)) enriched.push(item);
+      }
+      localStorage.setItem(key, JSON.stringify(enriched));
+      return enriched;
+    }
+    return parsed;
   } catch {
     return initial;
   }

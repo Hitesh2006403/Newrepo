@@ -33,7 +33,7 @@ export const DonationCard = ({ donation, onShowQr, onReopen }) => {
           <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-black/20" />
 
           {/* Top Status Badges */}
-          <div className="absolute top-3 left-3 flex items-center gap-1.5">
+          <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
             <StatusBadge status={donation.status} />
             <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border shadow-xs ${
               donation.dietaryCategory === 'veg'
@@ -44,6 +44,11 @@ export const DonationCard = ({ donation, onShowQr, onReopen }) => {
             }`}>
               {donation.dietaryCategory}
             </span>
+            {donation.venueType && (
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-xs text-amber-300 border border-amber-300/30">
+                {donation.venueType}
+              </span>
+            )}
           </div>
 
           {/* Unit & Storage Badge */}

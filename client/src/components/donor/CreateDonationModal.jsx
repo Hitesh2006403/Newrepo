@@ -17,6 +17,7 @@ export const CreateDonationModal = ({ isOpen, onClose }) => {
 
   const [formData, setFormData] = useState({
     foodName: '',
+    venueType: 'HOTELS',
     foodType: 'cooked_meals',
     initialQuantity: 50,
     unit: 'servings',
@@ -51,6 +52,7 @@ export const CreateDonationModal = ({ isOpen, onClose }) => {
       await createDonation({
         donorId: currentUser?.id || 'donor-1',
         donorName: currentUser?.organizationName || currentUser?.name || 'Grand Hyatt Bistro',
+        venueType: formData.venueType,
         donorPhone: currentUser?.phone || '+91 98765 43210',
         foodName: formData.foodName,
         foodType: formData.foodType,
@@ -118,6 +120,25 @@ export const CreateDonationModal = ({ isOpen, onClose }) => {
               <option value="packaged_food">Packaged Grocery</option>
               <option value="fresh_produce">Fresh Fruits / Veg</option>
               <option value="dairy">Dairy Products</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Venue Type & Dietary Category */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+              Donor Venue Type
+            </label>
+            <select
+              value={formData.venueType}
+              onChange={(e) => setFormData({ ...formData, venueType: e.target.value })}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm bg-white"
+            >
+              <option value="HOTELS">HOTELS (Hotels, Resorts & Luxury Banquets)</option>
+              <option value="Resturant">Resturant (Restaurants, Cafes & Bistros)</option>
+              <option value="Event venue">Event venue (Weddings, Conventions & Catering)</option>
+              <option value="Others">Others (Hostels, Food Courts & Community)</option>
             </select>
           </div>
         </div>

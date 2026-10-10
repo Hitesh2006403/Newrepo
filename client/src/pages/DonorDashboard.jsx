@@ -31,13 +31,30 @@ export const DonorDashboard = ({ isCreateOpen, setIsCreateOpen }) => {
   const donorDonations = donations;
 
   const filtered = donorDonations.filter((d) => {
-    // Tab filter
+    // Venue / Category filter: HOTELS, Resturant, Event venue, Others
     let matchesTab = true;
-    if (activeTab === 'ACTIVE') matchesTab = d.status === 'AVAILABLE' || d.status === 'REOPENED';
-    else if (activeTab === 'PARTIALLY_ACCEPTED') matchesTab = d.status === 'PARTIALLY_ACCEPTED';
-    else if (activeTab === 'PICKUP_SCHEDULED') matchesTab = d.status === 'PICKUP_SCHEDULED' || d.status === 'OUT_FOR_DELIVERY';
-    else if (activeTab === 'COMPLETED') matchesTab = d.status === 'COMPLETED';
-    else if (activeTab === 'CANCELLED') matchesTab = d.status === 'CANCELLED';
+    const venueText = `${d.donorName || ''} ${d.foodName || ''} ${d.pickupLocation?.address || ''}`.toLowerCase();
+
+    if (activeTab === 'HOTELS') {
+      matchesTab =
+        d.venueType === 'HOTELS' ||
+        /hotel|hyatt|sheraton|marriott|taj|resort|radisson|hilton/i.test(venueText);
+    } else if (activeTab === 'Resturant') {
+      matchesTab =
+        d.venueType === 'Resturant' ||
+        /restaurant|resturant|bistro|bakery|cafe|kitchen|diner|grill/i.test(venueText);
+    } else if (activeTab === 'Event venue') {
+      matchesTab =
+        d.venueType === 'Event venue' ||
+        /event|venue|banquet|catering|hall|convention|wedding|pavilion|grounds/i.test(venueText);
+    } else if (activeTab === 'Others') {
+      matchesTab =
+        d.venueType === 'Others' ||
+        /court|campus|hostel|mess|supermarket|market/i.test(venueText) ||
+        (!/hotel|hyatt|sheraton/i.test(venueText) &&
+          !/restaurant|bistro|bakery|grill/i.test(venueText) &&
+          !/convention|wedding|pavilion/i.test(venueText));
+    }
 
     // Search query filter
     const q = searchQuery.toLowerCase().trim();
@@ -45,8 +62,8 @@ export const DonorDashboard = ({ isCreateOpen, setIsCreateOpen }) => {
       !q ||
       d.foodName.toLowerCase().includes(q) ||
       d.donorName.toLowerCase().includes(q) ||
-      d.dietaryCategory.toLowerCase().includes(q) ||
-      d.pickupLocation?.address.toLowerCase().includes(q);
+      (d.dietaryCategory && d.dietaryCategory.toLowerCase().includes(q)) ||
+      (d.pickupLocation?.address && d.pickupLocation.address.toLowerCase().includes(q));
 
     return matchesTab && matchesSearch;
   });
@@ -123,19 +140,18 @@ export const DonorDashboard = ({ isCreateOpen, setIsCreateOpen }) => {
           </div>
         </div>
 
-        {/* Category Tabs */}
+        {/* Category Tabs: HOTELS, Resturant, Event venue, Others */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full border-t border-slate-100 pt-3">
           {[
             { id: 'ALL', label: 'All Batches' },
-            { id: 'ACTIVE', label: 'Ready for Pickup' },
-            { id: 'PARTIALLY_ACCEPTED', label: 'Partially Claimed' },
-            { id: 'PICKUP_SCHEDULED', label: 'Pickup / Transit' },
-            { id: 'COMPLETED', label: 'Completed' },
-            { id: 'CANCELLED', label: 'Cancelled' },
+            { id: 'HOTELS', label: 'HOTELS' },
+            { id: 'Resturant', label: 'Resturant' },
+            { id: 'Event venue', label: 'Event venue' },
+            { id: 'Others', label: 'Others' },
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => setActiveTab(activeTab === tab.id && tab.id !== 'ALL' ? 'ALL' : tab.id)}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
                 activeTab === tab.id
                   ? 'bg-rose-600 text-white shadow-xs'
