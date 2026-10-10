@@ -10,12 +10,10 @@ import {
   RotateCcw,
   Sparkles,
   ShieldCheck,
-  CheckCircle2,
-  ChevronRight,
 } from 'lucide-react';
 import { api } from '../../services/api';
 
-export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenAuth }) => {
+export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement }) => {
   const { currentUser, role, switchRole } = useAuth();
   const { impactMetrics } = useDonations();
 
@@ -30,70 +28,61 @@ export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenAuth
     {
       id: 'donor',
       label: 'Donor',
-      subtitle: 'Restaurants & Catering',
       icon: UtensilsCrossed,
-      activeColor: 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/25 ring-2 ring-amber-400/80',
+      activeColor: 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-md shadow-amber-500/30',
       iconColor: 'text-amber-500',
     },
     {
       id: 'recipient',
       label: 'Recipient',
-      subtitle: 'NGOs & Shelters',
       icon: Home,
-      activeColor: 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/25 ring-2 ring-emerald-400/80',
+      activeColor: 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30',
       iconColor: 'text-emerald-500',
     },
     {
       id: 'delivery',
       label: 'Delivery Agent',
-      subtitle: 'Transit & Fleet',
       icon: Bike,
-      activeColor: 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/25 ring-2 ring-blue-400/80',
+      activeColor: 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30',
       iconColor: 'text-blue-500',
     },
     {
       id: 'admin',
       label: 'Admin',
-      subtitle: 'Ops & Telemetry',
       icon: ShieldAlert,
-      activeColor: 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-lg shadow-rose-600/25 ring-2 ring-rose-400/80',
+      activeColor: 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-md shadow-rose-600/30',
       iconColor: 'text-rose-500',
     },
   ];
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-sm">
-      <div className="max-w-[1680px] w-full mx-auto px-4 sm:px-6 lg:px-10">
-        {/* Main Navbar Top Row */}
-        <div className="flex items-center justify-between py-3.5 gap-4 lg:gap-8 flex-wrap xl:flex-nowrap">
-          {/* Brand Logo & Mission Statement */}
-          <div className="flex items-center gap-3.5 shrink-0">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-600 via-amber-500 to-amber-400 flex items-center justify-center text-white shadow-md shadow-rose-600/25">
-              <HeartHandshake className="w-7 h-7" />
+    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs">
+      <div className="max-w-[1680px] w-full mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Main Navbar Top Row - Strictly No Scrollbar, Elements Beside Each Other */}
+        <div className="flex items-center justify-between h-20 gap-3 lg:gap-6">
+          {/* 1. Left: Brand Logo & Identity */}
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-rose-600 via-amber-500 to-amber-400 flex items-center justify-center text-white shadow-md shadow-rose-600/20">
+              <HeartHandshake className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-black text-xl sm:text-2xl tracking-tight text-slate-900">
+                <span className="font-black text-xl tracking-tight text-slate-900">
                   Share<span className="text-rose-600">A</span>Plate
                 </span>
-                <span className="bg-amber-100 text-amber-900 text-[11px] font-extrabold px-2 py-0.5 rounded-full tracking-wider uppercase border border-amber-300/80">
+                <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2 py-0.5 rounded-full tracking-wider uppercase border border-amber-300">
                   v1.0 MVP
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium hidden sm:block">
-                Share More, Waste Less • Food Rescue Coordination
+              <p className="text-[11px] text-slate-500 font-medium hidden sm:block">
+                Share More, Waste Less • Food Rescue Engine
               </p>
             </div>
           </div>
 
-          {/* PROMINENT, WIDE & BIGGER ROLE SWITCHER SECTION */}
-          <div className="order-last xl:order-none w-full xl:w-auto flex-1 flex justify-center py-1 xl:py-0">
-            <div className="bg-slate-100/90 p-1.5 rounded-2xl border-2 border-slate-200/90 shadow-inner flex items-center gap-1.5 sm:gap-2 overflow-x-auto max-w-full justify-start sm:justify-center">
-              <div className="hidden md:flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-wider shrink-0 shadow-xs">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>SELECT ROLE:</span>
-              </div>
-
+          {/* 2. Center: Prominent Role Switcher (Beside each other, perfectly fitted, NO scroll effect) */}
+          <div className="flex items-center justify-center flex-1 max-w-2xl px-2">
+            <div className="bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/90 shadow-2xs flex items-center justify-center gap-1 sm:gap-1.5 w-full">
               {ROLES.map((r) => {
                 const Icon = r.icon;
                 const isActive = role === r.id;
@@ -101,41 +90,25 @@ export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenAuth
                   <button
                     key={r.id}
                     onClick={() => switchRole(r.id)}
-                    className={`flex items-center gap-2 px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold transition-all duration-200 shrink-0 text-xs sm:text-sm ${
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-2.5 sm:px-4 rounded-xl font-bold transition-all duration-200 text-xs sm:text-sm whitespace-nowrap ${
                       isActive
                         ? r.activeColor
-                        : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border border-slate-200/70 shadow-2xs hover:shadow-xs'
+                        : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border border-slate-200/80 shadow-2xs'
                     }`}
-                    title={`Switch perspective to ${r.label} (${r.subtitle})`}
+                    title={`Switch to ${r.label}`}
                   >
-                    <Icon
-                      className={`w-4 h-4 sm:w-5 h-5 ${
-                        isActive ? 'text-white' : r.iconColor
-                      }`}
-                    />
-                    <div className="text-left">
-                      <div className="leading-tight">{r.label}</div>
-                      <div
-                        className={`text-[10px] font-medium hidden sm:block ${
-                          isActive ? 'text-white/80' : 'text-slate-400'
-                        }`}
-                      >
-                        {r.subtitle}
-                      </div>
-                    </div>
-                    {isActive && (
-                      <span className="w-2 h-2 rounded-full bg-white ml-0.5 animate-pulse hidden sm:inline-block" />
-                    )}
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : r.iconColor}`} />
+                    <span className="truncate">{r.label}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Right Action Tools & Live Counters */}
-          <div className="flex items-center gap-3 shrink-0 ml-auto xl:ml-0">
+          {/* 3. Right: Impact Counter & Quick Action */}
+          <div className="flex items-center gap-2.5 shrink-0">
             {/* Live Impact Counter */}
-            <div className="hidden lg:flex items-center gap-2 bg-emerald-50 border border-emerald-300 text-emerald-900 px-3.5 py-2 rounded-xl text-xs font-bold shadow-2xs">
+            <div className="hidden xl:flex items-center gap-2 bg-emerald-50 border border-emerald-300 text-emerald-900 px-3.5 py-2 rounded-xl text-xs font-bold shadow-2xs">
               <Sparkles className="w-4 h-4 text-emerald-600 animate-pulse" />
               <span>{impactMetrics?.totalMealsRescued?.toLocaleString() || '4,892'} Meals Rescued</span>
             </div>
@@ -144,7 +117,7 @@ export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenAuth
             {role === 'donor' && (
               <button
                 onClick={onOpenCreateDonation}
-                className="bg-gradient-to-r from-rose-600 to-amber-500 hover:from-rose-500 hover:to-amber-400 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-md shadow-rose-600/30 active:scale-95 transition flex items-center gap-2"
+                className="bg-gradient-to-r from-rose-600 to-amber-500 hover:from-rose-500 hover:to-amber-400 text-white font-bold text-xs sm:text-sm px-4 py-2 rounded-xl shadow-md shadow-rose-600/30 active:scale-95 transition flex items-center gap-1.5 whitespace-nowrap"
               >
                 <UtensilsCrossed className="w-4 h-4" />
                 <span>+ Post Food Surplus</span>
@@ -154,7 +127,7 @@ export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenAuth
             {role === 'recipient' && (
               <button
                 onClick={onOpenPostRequirement}
-                className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm px-4 py-2.5 rounded-xl shadow-md shadow-emerald-600/30 active:scale-95 transition flex items-center gap-2"
+                className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm px-4 py-2 rounded-xl shadow-md shadow-emerald-600/30 active:scale-95 transition flex items-center gap-1.5 whitespace-nowrap"
               >
                 <Home className="w-4 h-4" />
                 <span>+ Post Requirement</span>
@@ -165,7 +138,7 @@ export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenAuth
             <button
               onClick={handleResetData}
               title="Reset Demo Data"
-              className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition border border-slate-200"
+              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition border border-slate-200"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -173,13 +146,13 @@ export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenAuth
         </div>
 
         {/* User Identity subbar */}
-        <div className="py-2.5 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 flex-wrap gap-2">
-          <div className="flex items-center gap-2.5">
-            <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[11px] bg-slate-100 px-2.5 py-1 rounded-lg text-slate-700 border border-slate-200">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              Current Session:
+        <div className="py-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5 font-bold uppercase tracking-wider text-[11px] bg-slate-100 px-2 py-0.5 rounded text-slate-700 border border-slate-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              Session:
             </span>
-            <span className="font-extrabold text-slate-900 text-sm">
+            <span className="font-extrabold text-slate-900">
               {currentUser?.organizationName || currentUser?.name}
             </span>
             <span className="text-slate-400 hidden sm:inline">•</span>
@@ -190,10 +163,10 @@ export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenAuth
 
           <div className="flex items-center gap-3">
             <span className="hidden md:inline text-[11px] text-slate-400 italic">
-              {role === 'donor' && 'Posting surplus batches & monitoring expiry countdowns'}
-              {role === 'recipient' && 'Requesting food & smart match routing algorithms'}
-              {role === 'delivery' && 'Live GPS transit routing & 4-point QR handovers'}
-              {role === 'admin' && 'Central impact metrics & real-time donation audit log'}
+              {role === 'donor' && 'Posting surplus batches & monitoring live expiry countdowns'}
+              {role === 'recipient' && 'Requesting food & smart match recommendations'}
+              {role === 'delivery' && 'Active pickup milestones & QR handover checks'}
+              {role === 'admin' && 'Central platform impact & live donation monitoring'}
             </span>
             <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
