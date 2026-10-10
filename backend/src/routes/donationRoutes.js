@@ -67,6 +67,20 @@ router.post(
   donationController.cancelDonation
 );
 
+// POST /api/v1/donations/:id/accept - Claim / accept donation
+router.post(
+  '/:id/accept',
+  authorizeRoles(ROLES.RECIPIENT, ROLES.ADMIN),
+  donationController.acceptDonation
+);
+
+// PATCH /api/v1/donations/:id/reopen - Reopen cancelled or remaining donation
+router.patch(
+  '/:id/reopen',
+  authorizeRoles(ROLES.DONOR, ROLES.ADMIN),
+  donationController.reopenDonation
+);
+
 // PATCH /api/v1/donations/:id - Edit unaccepted donation
 router.patch(
   '/:id',

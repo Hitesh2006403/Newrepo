@@ -6,6 +6,7 @@ const donationRoutes = require('./donationRoutes');
 const requirementRoutes = require('./requirementRoutes');
 const dashboardRoutes = require('./dashboardRoutes');
 const notificationRoutes = require('./notificationRoutes');
+const handoverRoutes = require('./handoverRoutes');
 
 const router = express.Router();
 
@@ -65,6 +66,9 @@ router.use('/dashboard', dashboardRoutes);
 
 // In-app notifications and automated voice calls (/api/v1/notifications)
 router.use('/notifications', notificationRoutes);
+
+// Secure QR Code Handover System (/api/v1/handover)
+router.use('/handover', handoverRoutes);
 
 // Test harness verification route (active strictly in test environment)
 if (process.env.NODE_ENV === 'test') {

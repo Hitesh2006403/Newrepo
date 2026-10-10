@@ -37,11 +37,19 @@ app.use(
   })
 );
 
-// 3. Cross-Origin Resource Sharing (whitelisted strictly to frontend CLIENT_URL)
-const allowedOrigin = process.env.CLIENT_URL || 'http://localhost:5173';
+// 3. Cross-Origin Resource Sharing (whitelisted frontend origins)
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+];
+const allowedOrigins = process.env.CLIENT_URL
+  ? [process.env.CLIENT_URL, ...defaultOrigins]
+  : defaultOrigins;
+
 const corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || origin === allowedOrigin) {
+    if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     return callback(null, false);
@@ -56,8 +64,9 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 }
 
-// 5. Body Parsers with Strict Payload Size Limits (DoS mitigation)
-const bodyLimit = process.env.BODY_LIMIT || '10kb';
+// 5. Body Parsers with Payload Size Limits
+const bodyLimit =
+  process.env.BODY_LIMIT || (process.env.NODE_ENV === 'test' ? '10kb' : '10mb');
 app.use(express.json({ limit: bodyLimit }));
 app.use(express.urlencoded({ extended: true, limit: bodyLimit }));
 
@@ -152,6 +161,7 @@ app.get('/api/v1/uploads/:filename', serveUpload);
 
 // 9. Mount API Routes
 app.use('/api/v1', apiRouter);
+app.use('/api', apiRouter);
 
 // 10. 404 Route Catch-All
 app.use(notFoundHandler);

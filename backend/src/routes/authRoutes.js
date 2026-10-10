@@ -27,6 +27,7 @@ const authLimiter = rateLimit({
 // Public authentication routes
 router.post('/register', authLimiter, validate({ body: registerSchema }), authController.register);
 router.post('/login', authLimiter, validate({ body: loginSchema }), authController.login);
+router.post('/google', authLimiter, authController.googleAuth);
 
 // Protected authentication routes
 router.post('/logout', protect, authController.logout);

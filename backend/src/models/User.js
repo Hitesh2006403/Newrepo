@@ -88,6 +88,10 @@ const UserSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    googleId: { type: String, sparse: true, index: true },
+    googleVerified: { type: Boolean, default: false },
+    authProvider: { type: String, default: 'local' },
+    avatar: { type: String, default: '' },
   },
   {
     timestamps: true,

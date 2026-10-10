@@ -673,6 +673,95 @@ const deleteDonationPhoto = asyncHandler(async (req, res) => {
   );
 });
 
+/**
+ * POST /api/v1/donations/:id/accept
+ * Claim / accept portion or full quantity of a donation.
+ */
+const acceptDonation = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { quantityAccepted = 1, notes, pickupPreference, requirementId } = req.body;
+
+  const donation = await Donation.findById(id);
+  if (!donation) {
+    throw new ApiError(404, ERROR_CODES.RESOURCE_NOT_FOUND, 'Donation not found');
+  }
+
+  const qty = Number(quantityAccepted);
+  if (qty <= 0 || qty > donation.remainingQuantity) {
+    throw new ApiError(
+      400,
+      ERROR_CODES.VALIDATION_ERROR,
+      `Requested quantity (${qty}) exceeds available remaining quantity (${donation.remainingQuantity})`
+    );
+  }
+
+  donation.remainingQuantity -= qty;
+  const newStatus = donation.remainingQuantity === 0 ? DONATION_STATUS.ACCEPTED : DONATION_STATUS.PARTIALLY_ACCEPTED;
+  donation.status = newStatus;
+
+  const newAcceptance = {
+    recipientId: req.user._id,
+    requirementId: requirementId || null,
+    quantity: qty,
+    status: ACCEPTANCE_STATUS.CLAIMED,
+    pickupPreference: pickupPreference || 'delivery_agent_required',
+    claimedAt: new Date(),
+    notes: notes || null,
+  };
+
+  if (!donation.acceptances) donation.acceptances = [];
+  donation.acceptances.push(newAcceptance);
+
+  donation.statusHistory.push({
+    status: newStatus,
+    changedBy: req.user._id,
+    note: `Claimed ${qty} ${donation.unit} by ${req.user.name}`,
+    timestamp: new Date(),
+  });
+
+  await donation.save();
+  await donation.populate('donorId', 'name ratingAverage ratingCount phone');
+
+  return ApiResponse.send(
+    res,
+    200,
+    'Donation claimed successfully',
+    toDonationView(donation, req.user)
+  );
+});
+
+/**
+ * PATCH /api/v1/donations/:id/reopen
+ * Reopen a cancelled or partially remaining donation.
+ */
+const reopenDonation = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { notes } = req.body;
+
+  const donation = await Donation.findById(id);
+  if (!donation) {
+    throw new ApiError(404, ERROR_CODES.RESOURCE_NOT_FOUND, 'Donation not found');
+  }
+
+  donation.status = DONATION_STATUS.REOPENED;
+  donation.statusHistory.push({
+    status: DONATION_STATUS.REOPENED,
+    changedBy: req.user._id,
+    note: notes || 'Donation reopened for community matching',
+    timestamp: new Date(),
+  });
+
+  await donation.save();
+  await donation.populate('donorId', 'name ratingAverage ratingCount phone');
+
+  return ApiResponse.send(
+    res,
+    200,
+    'Donation reopened successfully',
+    toDonationView(donation, req.user)
+  );
+});
+
 module.exports = {
   createDonation,
   getMyDonations,
@@ -684,4 +773,6 @@ module.exports = {
   getStatusHistory,
   uploadDonationPhotos,
   deleteDonationPhoto,
+  acceptDonation,
+  reopenDonation,
 };
