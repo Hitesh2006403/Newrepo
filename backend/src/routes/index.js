@@ -10,6 +10,7 @@ const handoverRoutes = require('./handoverRoutes');
 const reviewRoutes = require('./reviewRoutes');
 const deliveryRoutes = require('./deliveryRoutes');
 const recipientRoutes = require('./recipientRoutes');
+const porterRoutes = require('./porterRoutes');
 
 const router = express.Router();
 
@@ -81,6 +82,9 @@ router.use('/delivery', deliveryRoutes);
 
 // Recipient Portal Requirements & Smart Matches (/api/v1/recipient)
 router.use('/recipient', recipientRoutes);
+
+// Porter Enterprise Logistics Integration (/api/v1/porter)
+router.use('/porter', porterRoutes);
 
 // Test harness verification route (active strictly in test environment)
 if (process.env.NODE_ENV === 'test') {

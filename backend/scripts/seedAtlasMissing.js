@@ -122,6 +122,40 @@ const seedMissingData = async () => {
       console.log('[Atlas Seed] Successfully inserted delivery fleet tasks.');
     }
 
+    // Ensure at least one OPEN_FOR_PICKUP task is broadcasted on the radar
+    const openTaskCount = await DeliveryTask.countDocuments({ currentMilestone: 'OPEN_FOR_PICKUP' });
+    if (openTaskCount === 0) {
+      await DeliveryTask.create({
+        donationId: 'don-104',
+        deliveryAgentId: null,
+        foodName: 'Catered Event: 80 Veg Pulao & Raita Portions',
+        quantity: '80 portions',
+        foodType: 'cooked_meals',
+        storageCondition: 'heated (Thermal Insulated)',
+        urgencyLevel: 'URGENT',
+        payout: 120,
+        pickup: {
+          location: 'Grand Royal Banquet, 100ft Road, Indiranagar',
+          donorName: 'Grand Royal Banquet & Restaurant',
+          donorPhone: '+91 99000 00002',
+          deadline: new Date(Date.now() + 1.2 * 60 * 60 * 1000),
+        },
+        dropoff: {
+          location: 'Sunshine Orphanage, 8th Main, Koramangala',
+          recipientName: 'Sunshine Orphanage & Child Care',
+          recipientPhone: '+91 99000 00003',
+          deadline: new Date(Date.now() + 2.0 * 60 * 60 * 1000),
+        },
+        currentMilestone: 'OPEN_FOR_PICKUP',
+        distanceTotalKm: 4.1,
+        estimatedMinutes: 18,
+        qrRequiredToken: 'SAP-QR-DON-104-SECURE-7712',
+        vehicleSuggestion: 'Porter 3-Wheeler or two volunteer scooters',
+        safetyChecklistCompleted: false,
+      });
+      console.log('[Atlas Seed] Inserted broadcasted open task for Nearby Pickups Radar.');
+    }
+
     // 3. Inspect all collections and counts in MongoDB Atlas
     const collections = await mongoose.connection.db.listCollections().toArray();
     console.log('\n=============================================================================');

@@ -49,6 +49,8 @@ const DeliveryTaskSchema = new mongoose.Schema(
     currentMilestone: {
       type: String,
       enum: [
+        'OPEN_FOR_PICKUP',
+        'AVAILABLE',
         'ASSIGNED',
         'REACHED_DONOR',
         'EN_ROUTE_PICKUP',
@@ -60,6 +62,27 @@ const DeliveryTaskSchema = new mongoose.Schema(
         'CANCELLED',
       ],
       default: 'ASSIGNED',
+    },
+    deliveryProvider: {
+      type: String,
+      enum: ['IN_HOUSE', 'PORTER'],
+      default: 'IN_HOUSE',
+    },
+    payout: {
+      type: Number,
+      default: 95,
+    },
+    porterDetails: {
+      orderId: { type: String, default: null },
+      crn: { type: String, default: null },
+      driverName: { type: String, default: null },
+      driverPhone: { type: String, default: null },
+      vehicleNumber: { type: String, default: null },
+      vehicleType: { type: String, default: null },
+      fare: { type: Number, default: null },
+      trackingUrl: { type: String, default: null },
+      status: { type: String, default: null },
+      bookedAt: { type: Date, default: null },
     },
     distanceTotalKm: {
       type: Number,

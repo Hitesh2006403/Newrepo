@@ -686,6 +686,172 @@ export const api = {
     return task;
   },
 
+  claimDeliveryTask: async (taskId, agentInfo = {}) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/delivery/tasks/${taskId}/claim`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(agentInfo),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          const updated = json.data || json;
+          return { ...updated, id: updated.id || updated._id };
+        }
+      } catch (e) {
+        console.warn('Backend claim task error, using local fallback:', e);
+      }
+    }
+    await delay(150);
+    const task = mockTasks.find((t) => t.id === taskId);
+    if (task) {
+      task.currentMilestone = 'ASSIGNED';
+      task.deliveryAgentId = agentInfo.agentId || 'user-delivery-1';
+      task.deliveryProvider = 'IN_HOUSE';
+      save(STORAGE_KEYS.TASKS, mockTasks);
+    }
+    return task;
+  },
+
+  // ----------------------------------------------------
+  // PORTER ENTERPRISE LOGISTICS INTEGRATION
+  // ----------------------------------------------------
+  getPorterEstimate: async (estimateParams) => {
+    if (!USE_MOCK) {
+      try {
+        const res = await fetch(`${API_BASE}/porter/estimate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(estimateParams),
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend porter estimate error, using local fallback:', e);
+      }
+    }
+    await delay(150);
+    const qty = parseInt(estimateParams.quantityServings, 10) || 50;
+    const distance = estimateParams.distanceKm || 4.2;
+    return {
+      distanceKm: distance,
+      quantityServings: qty,
+      recommendedVehicle: qty > 120 ? 'TATA_ACE' : qty > 30 ? '3_WHEELER' : '2_WHEELER',
+      vehicles: [
+        {
+          vehicleType: '2_WHEELER',
+          displayName: 'Porter 2-Wheeler Bike',
+          icon: '🛵',
+          capacityDescription: 'Up to 30 meals (15 kg)',
+          estimatedFare: 65,
+          etaMinutes: 8,
+          isRecommended: qty <= 30,
+        },
+        {
+          vehicleType: '3_WHEELER',
+          displayName: 'Porter 3-Wheeler Cargo Auto',
+          icon: '🛺',
+          capacityDescription: '31 – 120 meals (60 kg)',
+          estimatedFare: 155,
+          etaMinutes: 12,
+          isRecommended: qty > 30 && qty <= 120,
+        },
+        {
+          vehicleType: 'TATA_ACE',
+          displayName: 'Porter Tata Ace (Chota Hathi)',
+          icon: '🚚',
+          capacityDescription: '121 – 600 meals (350 kg)',
+          estimatedFare: 310,
+          etaMinutes: 18,
+          isRecommended: qty > 120,
+        },
+      ],
+      serviceProvider: 'Porter On-Demand Logistics',
+      liveApiConnected: false,
+    };
+  },
+
+  bookPorterDelivery: async (bookingParams) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/porter/book`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(bookingParams),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          const result = json.data || json;
+          if (result.task) {
+            const idx = mockTasks.findIndex((t) => t.id === result.task.id || t.id === result.task._id);
+            if (idx >= 0) mockTasks[idx] = result.task;
+            else mockTasks.unshift(result.task);
+            save(STORAGE_KEYS.TASKS, mockTasks);
+          }
+          return result;
+        }
+      } catch (e) {
+        console.warn('Backend porter booking error, using local fallback:', e);
+      }
+    }
+    await delay(300);
+    const crn = `CRN-POR-${Math.floor(100000 + Math.random() * 900000)}`;
+    const booking = {
+      orderId: `por_sim_${Date.now()}`,
+      crn,
+      status: 'DRIVER_ASSIGNED',
+      driverName: 'Ramesh Kumar (Porter Certified)',
+      driverPhone: '+91 98450 12345',
+      driverRating: 4.9,
+      vehicleNumber: 'KA-01-MJ-4120',
+      vehicleType: bookingParams.vehicleType || '3_WHEELER',
+      fare: 155,
+      etaMinutes: 10,
+      trackingUrl: `https://porter.in/track/order/${crn}`,
+      bookedAt: new Date().toISOString(),
+      isLiveApi: false,
+      message: 'Porter driver partner assigned and heading to pickup location.',
+    };
+
+    const task = mockTasks.find((t) => t.id === bookingParams.taskId || t.donationId === bookingParams.donationId);
+    if (task) {
+      task.deliveryProvider = 'PORTER';
+      task.currentMilestone = 'EN_ROUTE_PICKUP';
+      task.porterDetails = booking;
+      save(STORAGE_KEYS.TASKS, mockTasks);
+    }
+    return { booking, task };
+  },
+
+  trackPorterDelivery: async (orderId, crn) => {
+    if (!USE_MOCK) {
+      try {
+        const res = await fetch(`${API_BASE}/porter/track/${orderId}?crn=${crn || ''}`);
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend porter track error:', e);
+      }
+    }
+    return {
+      orderId,
+      crn: crn || 'CRN-POR-98214',
+      status: 'IN_TRANSIT',
+      distanceRemainingKm: 2.1,
+      etaMinutes: 9,
+      trackingUrl: `https://porter.in/track/order/${crn || orderId}`,
+    };
+  },
+
   // ----------------------------------------------------
   // SECURE QR HANDOVER WORKFLOW (STAGES 1, 2, 3)
   // ----------------------------------------------------

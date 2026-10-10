@@ -419,6 +419,36 @@ export const INITIAL_DELIVERY_TASKS = [
     safetyChecklistCompleted: false,
     verifiedAt: null,
   },
+  {
+    id: 'task-303',
+    donationId: 'don-104',
+    deliveryAgentId: null,
+    foodName: 'Catered Event: 80 Veg Pulao & Raita Portions',
+    quantity: '80 portions',
+    foodType: 'cooked_meals',
+    storageCondition: 'heated (Thermal Insulated)',
+    urgencyLevel: 'URGENT',
+    payout: 120,
+    pickup: {
+      location: 'Grand Royal Banquet, 100ft Road, Indiranagar',
+      donorName: 'Grand Royal Banquet & Restaurant',
+      donorPhone: '+91 99000 00002',
+      deadline: getFutureISO(1.2),
+    },
+    dropoff: {
+      location: 'Sunshine Orphanage, 8th Main, Koramangala',
+      recipientName: 'Sunshine Orphanage & Child Care',
+      recipientPhone: '+91 99000 00003',
+      deadline: getFutureISO(2.0),
+    },
+    currentMilestone: 'OPEN_FOR_PICKUP',
+    distanceTotalKm: 4.1,
+    estimatedMinutes: 18,
+    qrRequiredToken: 'SAP-QR-DON-104-SECURE-7712',
+    vehicleSuggestion: 'Porter 3-Wheeler or two volunteer scooters',
+    safetyChecklistCompleted: false,
+    verifiedAt: null,
+  },
 ];
 
 export const INITIAL_IMPACT_METRICS = {

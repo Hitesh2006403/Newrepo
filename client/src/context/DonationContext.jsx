@@ -144,6 +144,41 @@ export const DonationProvider = ({ children }) => {
     }
   };
 
+  // Delivery agent claims open task from radar
+  const claimDeliveryTask = async (taskId, agentInfo = {}) => {
+    try {
+      const updated = await api.claimDeliveryTask(taskId, agentInfo);
+      setDeliveryTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+      addToast('Delivery job accepted! Added to your active runs.', 'success');
+      return updated;
+    } catch (err) {
+      addToast('Failed to accept job: ' + err.message, 'error');
+      throw err;
+    }
+  };
+
+  // Dispatch via Porter Enterprise
+  const bookPorterDelivery = async (bookingParams) => {
+    try {
+      const res = await api.bookPorterDelivery(bookingParams);
+      if (res.task) {
+        setDeliveryTasks((prev) => {
+          const exists = prev.some((t) => t.id === res.task.id || t.id === res.task._id);
+          if (exists) return prev.map((t) => ((t.id === res.task.id || t.id === res.task._id) ? res.task : t));
+          return [res.task, ...prev];
+        });
+      }
+      addToast(
+        `Porter driver ${res.booking?.driverName || 'Partner'} dispatched! CRN: ${res.booking?.crn || ''}`,
+        'success'
+      );
+      return res;
+    } catch (err) {
+      addToast('Failed to book Porter: ' + err.message, 'error');
+      throw err;
+    }
+  };
+
   // STAGE 1: Fetch or generate dynamic pickup QR code
   const getPickupToken = async (donationId) => {
     try {
@@ -288,6 +323,8 @@ export const DonationProvider = ({ children }) => {
         postRequirement,
         acceptDonation,
         updateDeliveryMilestone,
+        claimDeliveryTask,
+        bookPorterDelivery,
         getPickupToken,
         verifyPickupScan,
         confirmPickup,
