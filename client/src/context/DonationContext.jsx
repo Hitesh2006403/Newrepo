@@ -10,22 +10,25 @@ export const DonationProvider = ({ children }) => {
   const [requirements, setRequirements] = useState([]);
   const [deliveryTasks, setDeliveryTasks] = useState([]);
   const [impactMetrics, setImpactMetrics] = useState(null);
+  const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const { addToast } = useNotification();
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [dons, reqs, tasks, metrics] = await Promise.all([
+      const [dons, reqs, tasks, metrics, revs] = await Promise.all([
         api.getDonations(),
         api.getRequirements(),
         api.getDeliveryTasks(),
         api.getImpactMetrics(),
+        api.getReviews(),
       ]);
       setDonations(dons);
       setRequirements(reqs);
       setDeliveryTasks(tasks);
       setImpactMetrics(metrics);
+      setReviews(revs || []);
     } catch (err) {
       console.error('Failed to load platform data:', err);
       addToast('Error loading platform records: ' + err.message, 'error');
@@ -142,6 +145,27 @@ export const DonationProvider = ({ children }) => {
     }
   };
 
+  // Submit community review & feedback
+  const submitReview = async (reviewData) => {
+    try {
+      const created = await api.submitReview(reviewData);
+      setReviews((prev) => [created, ...prev]);
+
+      confetti({
+        particleCount: 80,
+        spread: 60,
+        origin: { y: 0.7 },
+        colors: ['#F59E0B', '#E11D48', '#10B981'],
+      });
+
+      addToast('Review submitted! Thank you for strengthening community trust.', 'success');
+      return created;
+    } catch (err) {
+      addToast('Failed to submit review: ' + err.message, 'error');
+      throw err;
+    }
+  };
+
   return (
     <DonationContext.Provider
       value={{
@@ -149,6 +173,7 @@ export const DonationProvider = ({ children }) => {
         requirements,
         deliveryTasks,
         impactMetrics,
+        reviews,
         loading,
         refresh: loadData,
         createDonation,
@@ -157,6 +182,7 @@ export const DonationProvider = ({ children }) => {
         acceptDonation,
         updateDeliveryMilestone,
         verifyHandover,
+        submitReview,
       }}
     >
       {children}

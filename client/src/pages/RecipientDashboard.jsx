@@ -6,6 +6,7 @@ import { MatchCard } from '../components/recipient/MatchCard';
 import { PostRequirementModal } from '../components/recipient/PostRequirementModal';
 import { AcceptModal } from '../components/recipient/AcceptModal';
 import { QrCodeModal } from '../components/common/QrCodeModal';
+import { ReviewsSection } from '../components/common/ReviewsSection';
 import {
   Home,
   Sparkles,
@@ -15,12 +16,17 @@ import {
   AlertCircle,
   CheckCircle2,
   QrCode,
+  Search,
+  X,
+  Filter,
 } from 'lucide-react';
 
 export const RecipientDashboard = ({ isPostReqOpen, setIsPostReqOpen }) => {
   const { currentUser } = useAuth();
   const { donations, requirements } = useDonations();
   const [smartMatches, setSmartMatches] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [dietaryFilter, setDietaryFilter] = useState('ALL');
   const [selectedDonationForClaim, setSelectedDonationForClaim] = useState(null);
   const [selectedDonationForQr, setSelectedDonationForQr] = useState(null);
 
@@ -43,8 +49,26 @@ export const RecipientDashboard = ({ isPostReqOpen, setIsPostReqOpen }) => {
     )
   );
 
+  // Filter smart matches with search query & dietary category
+  const filteredMatches = smartMatches.filter((m) => {
+    const don = m.donation;
+    const q = searchQuery.toLowerCase().trim();
+
+    const matchesSearch =
+      !q ||
+      don.foodName.toLowerCase().includes(q) ||
+      don.donorName.toLowerCase().includes(q) ||
+      don.pickupLocation?.address.toLowerCase().includes(q) ||
+      don.foodType.toLowerCase().includes(q);
+
+    const matchesDiet =
+      dietaryFilter === 'ALL' || don.dietaryCategory.toLowerCase() === dietaryFilter.toLowerCase();
+
+    return matchesSearch && matchesDiet;
+  });
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Top Hero Banner */}
       <div className="bg-gradient-to-r from-emerald-900 via-teal-800 to-emerald-950 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-lg">
         <div className="relative z-10 max-w-2xl space-y-3">
@@ -114,6 +138,66 @@ export const RecipientDashboard = ({ isPostReqOpen, setIsPostReqOpen }) => {
         </div>
       )}
 
+      {/* PROMINENT SEARCH BAR & DIETARY FILTERS */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          {/* Search Input */}
+          <div className="relative flex-1 w-full">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search available meals by food name, donor kitchen, or location..."
+              className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-slate-200 bg-slate-50/60 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="text-xs text-slate-500 font-medium shrink-0">
+            {searchQuery ? (
+              <span className="bg-emerald-50 text-emerald-800 font-bold px-2.5 py-1 rounded-lg border border-emerald-200">
+                Found {filteredMatches.length} match(es)
+              </span>
+            ) : (
+              <span>{filteredMatches.length} available smart matches</span>
+            )}
+          </div>
+        </div>
+
+        {/* Dietary Filters */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full border-t border-slate-100 pt-3">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
+            Dietary:
+          </span>
+          {[
+            { id: 'ALL', label: 'All Categories' },
+            { id: 'veg', label: '🥦 Vegetarian' },
+            { id: 'vegan', label: '🌱 100% Vegan' },
+            { id: 'non_veg', label: '🍗 Non-Vegetarian' },
+          ].map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setDietaryFilter(cat.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+                dietaryFilter === cat.id
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Smart Match Recommendations Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -128,13 +212,32 @@ export const RecipientDashboard = ({ isPostReqOpen, setIsPostReqOpen }) => {
           </span>
         </div>
 
-        {smartMatches.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-xs">
-            No active surplus donations currently available in this radius. Check back shortly.
+        {filteredMatches.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-dashed border-slate-300 p-12 text-center space-y-3">
+            <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto">
+              <Home className="w-6 h-6" />
+            </div>
+            <h4 className="text-base font-bold text-slate-800">No surplus donations match your filter</h4>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              {searchQuery
+                ? `No batches matched "${searchQuery}". Try broadening your search or dietary filter.`
+                : 'No active surplus donations currently available in this radius. Broadcast your food requirement above.'}
+            </p>
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setDietaryFilter('ALL');
+                }}
+                className="inline-flex items-center gap-1.5 bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-700 transition"
+              >
+                <span>Reset Search Filters</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {smartMatches.map((match) => (
+            {filteredMatches.map((match) => (
               <MatchCard
                 key={match.donation.id}
                 match={match}
@@ -146,7 +249,7 @@ export const RecipientDashboard = ({ isPostReqOpen, setIsPostReqOpen }) => {
       </div>
 
       {/* Recipient Active Requirements Log */}
-      <div className="space-y-3 pt-4">
+      <div className="space-y-3 pt-4 border-t border-slate-200">
         <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
           <Clock className="w-4 h-4 text-slate-500" />
           <span>Your Submitted Requirements</span>
@@ -169,6 +272,11 @@ export const RecipientDashboard = ({ isPostReqOpen, setIsPostReqOpen }) => {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* REVIEWS & COMMUNITY FEEDBACK SECTION */}
+      <div className="pt-4 border-t border-slate-200">
+        <ReviewsSection />
       </div>
 
       {/* Modals */}

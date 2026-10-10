@@ -5,6 +5,7 @@ import {
   INITIAL_RECIPIENT_REQUIREMENTS,
   INITIAL_DELIVERY_TASKS,
   INITIAL_IMPACT_METRICS,
+  INITIAL_REVIEWS,
 } from './mockData';
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
@@ -18,6 +19,7 @@ const STORAGE_KEYS = {
   TASKS: 'sap_tasks_v1',
   METRICS: 'sap_metrics_v1',
   CURRENT_USER: 'sap_current_user_v1',
+  REVIEWS: 'sap_reviews_v1',
 };
 
 // State initializer
@@ -48,6 +50,7 @@ let mockDonations = loadOrInit(STORAGE_KEYS.DONATIONS, INITIAL_DONATIONS);
 let mockRequirements = loadOrInit(STORAGE_KEYS.REQUIREMENTS, INITIAL_RECIPIENT_REQUIREMENTS);
 let mockTasks = loadOrInit(STORAGE_KEYS.TASKS, INITIAL_DELIVERY_TASKS);
 let mockMetrics = loadOrInit(STORAGE_KEYS.METRICS, INITIAL_IMPACT_METRICS);
+let mockReviews = loadOrInit(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
 
 // Simulated network delay helper
 const delay = (ms = 250) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -421,17 +424,53 @@ export const api = {
     return mockMetrics;
   },
 
+  // ----------------------------------------------------
+  // REVIEWS & COMMUNITY FEEDBACK
+  // ----------------------------------------------------
+  getReviews: async () => {
+    if (!USE_MOCK) {
+      const res = await fetch(`${API_BASE}/reviews`);
+      return await res.json();
+    }
+    await delay(100);
+    return mockReviews;
+  },
+
+  submitReview: async (reviewData) => {
+    if (!USE_MOCK) {
+      const res = await fetch(`${API_BASE}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(reviewData),
+      });
+      return await res.json();
+    }
+    await delay(250);
+    const newReview = {
+      id: 'rev-' + Date.now(),
+      createdAt: new Date().toISOString(),
+      verifiedRescue: true,
+      ...reviewData,
+    };
+    mockReviews.unshift(newReview);
+    save(STORAGE_KEYS.REVIEWS, mockReviews);
+    return newReview;
+  },
+
   resetDemoData: () => {
     mockUsers = INITIAL_USERS;
     mockDonations = INITIAL_DONATIONS;
     mockRequirements = INITIAL_RECIPIENT_REQUIREMENTS;
     mockTasks = INITIAL_DELIVERY_TASKS;
     mockMetrics = INITIAL_IMPACT_METRICS;
+    mockReviews = INITIAL_REVIEWS;
     save(STORAGE_KEYS.USERS, INITIAL_USERS);
     save(STORAGE_KEYS.DONATIONS, INITIAL_DONATIONS);
     save(STORAGE_KEYS.REQUIREMENTS, INITIAL_RECIPIENT_REQUIREMENTS);
     save(STORAGE_KEYS.TASKS, INITIAL_DELIVERY_TASKS);
     save(STORAGE_KEYS.METRICS, INITIAL_IMPACT_METRICS);
+    save(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
     return true;
   },
 };
+

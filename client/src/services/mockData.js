@@ -348,3 +348,46 @@ export const INITIAL_IMPACT_METRICS = {
   activeVolunteersAndRiders: 24,
   partnerOrgsCount: 42,
 };
+
+export const INITIAL_REVIEWS = [
+  {
+    id: 'rev-1',
+    donationId: 'don-105',
+    donorName: 'Grand Hyatt Banquet & Bistro',
+    recipientName: 'Mother Teresa Home for Aged',
+    authorRole: 'recipient',
+    rating: 5,
+    foodName: 'Catered Wedding Dinner: Biryani, Dal Makhani & Roti',
+    comment: 'Extremely high quality food, hot and delicious. Fed 150 elderly residents seamlessly. Blessings to the culinary team for zero wastage!',
+    tags: ['Fresh & Hot', 'Punctual Handover', 'Hygienically Packed'],
+    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+    verifiedRescue: true,
+  },
+  {
+    id: 'rev-2',
+    donationId: 'don-102',
+    donorName: 'Artisan Sourdough & Bakery Guild',
+    recipientName: 'Asha Bhavan Community Kitchen',
+    authorRole: 'recipient',
+    rating: 5,
+    foodName: 'Fresh Baked Multigrain Loaves, Brioche & Croissants',
+    comment: 'Wonderful bakery rescue! Packaged cleanly with clear allergen notices. Children and volunteers loved the fresh brioche buns.',
+    tags: ['Sealed Packaging', 'Accurate Labeling', 'Quick Response'],
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    verifiedRescue: true,
+  },
+  {
+    id: 'rev-3',
+    donationId: 'don-103',
+    donorName: 'Infosys Food Court 4',
+    recipientName: 'Grace Hope Children Shelter',
+    authorRole: 'recipient',
+    rating: 4.8,
+    foodName: 'Nutritious South Indian Meal: Sambar, Rice & Poriyal',
+    comment: 'Great quantity and well-balanced nutrition. Handover rider Vikram was very polite and handled the insulated hot box safely.',
+    tags: ['Nutritious Meals', 'Safe Transit', 'Polite Rider'],
+    createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
+    verifiedRescue: true,
+  },
+];
+

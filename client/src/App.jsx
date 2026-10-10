@@ -76,8 +76,6 @@ function DashboardRouter() {
               Verified FSSAI / Food Safety Protocols
             </span>
             <span>•</span>
-            <span>MERN Stack Architecture</span>
-            <span>•</span>
             <button
               onClick={() => setIsAuthModalOpen(true)}
               className="text-rose-600 font-bold hover:underline"
