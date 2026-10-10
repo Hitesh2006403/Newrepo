@@ -163,12 +163,24 @@ export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenLogi
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
               Session:
             </span>
+            {currentUser?.avatar && (
+              <img
+                src={currentUser.avatar}
+                alt={currentUser.name}
+                className="w-5 h-5 rounded-full object-cover ring-1 ring-slate-300"
+              />
+            )}
             <span className="font-extrabold text-slate-900">
               {currentUser?.organizationName || currentUser?.name}
             </span>
+            {currentUser?.googleVerified && (
+              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                Google SSO
+              </span>
+            )}
             <span className="text-slate-400 hidden sm:inline">•</span>
             <span className="text-slate-500 hidden sm:inline font-medium">
-              {currentUser?.address}
+              {currentUser?.address || 'Bengaluru Core Area'}
             </span>
           </div>
 
