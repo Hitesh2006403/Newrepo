@@ -28,6 +28,7 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 const mongoose = require('mongoose');
 const request = require('supertest');
 
+const sharp = require('sharp');
 const app = require('../app');
 const User = require('../src/models/User');
 const Notification = require('../src/models/Notification');
@@ -36,10 +37,6 @@ const { ROLES } = require('../src/constants/roles');
 const ERROR_CODES = require('../src/constants/errorCodes');
 
 let mongoServer;
-
-const validSmokeJpeg = Buffer.from([
-  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
-]);
 
 const runStep = async (stepNumber, stepTitle, fn) => {
   try {
@@ -75,6 +72,30 @@ async function main() {
   let verifiedRecipientToken;
   let donation1Id, donation2Id;
   let createdNotificationId;
+
+  // Generate real JPEG fixture containing EXIF GPS tags
+  const validSmokeJpegWithGps = await sharp({
+    create: {
+      width: 60,
+      height: 60,
+      channels: 3,
+      background: { r: 240, g: 100, b: 20 },
+    },
+  })
+    .withExif({
+      IFD0: {
+        Make: 'Apple',
+        Model: 'iPhone 15 Pro',
+      },
+      GPSInfo: {
+        GPSLatitude: '12/1 58/1 0/1',
+        GPSLatitudeRef: 'N',
+        GPSLongitude: '77/1 35/1 0/1',
+        GPSLongitudeRef: 'E',
+      },
+    })
+    .jpeg()
+    .toBuffer();
 
   try {
     // -------------------------------------------------------------------------
@@ -285,13 +306,20 @@ async function main() {
     });
 
     // -------------------------------------------------------------------------
-    // Step 8: Donor uploads photo & verifies static serving
+    // Step 8: Donor uploads photo with GPS EXIF, verifies stripping & serving
     // -------------------------------------------------------------------------
-    await runStep(8, 'Donor uploads photo to donation and verifies static serving', async () => {
+    await runStep(8, 'Donor uploads photo with GPS EXIF, verifies stripping, serving & deletion', async () => {
+      // 1. Verify source fixture contains GPS metadata
+      const rawMeta = await sharp(validSmokeJpegWithGps).metadata();
+      if (!rawMeta.exif) {
+        throw new Error('Test fixture missing EXIF metadata');
+      }
+
+      // 2. Upload photo to donation
       const uploadRes = await request(app)
         .post(`/api/v1/donations/${donation1Id}/photos`)
         .set('Authorization', `Bearer ${donorToken}`)
-        .attach('photos', validSmokeJpeg, 'biryani_smoke.jpg');
+        .attach('photos', validSmokeJpegWithGps, 'biryani_smoke_with_gps.jpg');
 
       if (uploadRes.status !== 200 || !uploadRes.body.success || !uploadRes.body.data.photos.length) {
         const err = new Error('Photo upload failed');
@@ -299,13 +327,45 @@ async function main() {
         throw err;
       }
 
-      const photoUrl = uploadRes.body.data.photos[0];
+      const photoObj = uploadRes.body.data.photos[0];
+      const photoUrl = typeof photoObj === 'object' ? photoObj.url : photoObj;
+      const photoId = typeof photoObj === 'object' ? photoObj.id : null;
+
+      if (!photoUrl) {
+        throw new Error('Photo URL is missing from upload response');
+      }
+
+      // 3. Static GET verification
       const staticRes = await request(app).get(photoUrl);
 
       if (staticRes.status !== 200 || staticRes.headers['x-content-type-options'] !== 'nosniff') {
         const err = new Error('Static photo serving or nosniff header verification failed');
         err.response = staticRes;
         throw err;
+      }
+
+      // 4. Verify EXIF and GPS tags are completely stripped
+      const strippedMeta = await sharp(staticRes.body).metadata();
+      if (strippedMeta.exif) {
+        throw new Error('GPS/EXIF metadata was NOT stripped from uploaded photo');
+      }
+
+      // 5. Verify DELETE photo endpoint
+      if (photoId) {
+        const delRes = await request(app)
+          .delete(`/api/v1/donations/${donation1Id}/photos/${photoId}`)
+          .set('Authorization', `Bearer ${donorToken}`);
+
+        if (delRes.status !== 200 || !delRes.body.success) {
+          const err = new Error('Photo deletion failed');
+          err.response = delRes;
+          throw err;
+        }
+
+        const afterDelRes = await request(app).get(photoUrl);
+        if (afterDelRes.status !== 404) {
+          throw new Error('Deleted photo still served statically');
+        }
       }
     });
 

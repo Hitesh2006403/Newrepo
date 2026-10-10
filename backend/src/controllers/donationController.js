@@ -462,6 +462,13 @@ const cancelDonation = asyncHandler(async (req, res) => {
     );
   }
 
+  // Remote/local storage cleanup: delete photos associated with cancelled donation
+  if (Array.isArray(updatedDonation.photos) && updatedDonation.photos.length > 0) {
+    for (const photo of updatedDonation.photos) {
+      await storageService.deleteFile(photo.url, photo.publicId).catch(() => {});
+    }
+  }
+
   return ApiResponse.send(
     res,
     200,
@@ -570,23 +577,98 @@ const uploadDonationPhotos = asyncHandler(async (req, res) => {
   }
 
   // 4. Save files via storage adapter
-  const uploadedUrls = [];
+  const uploadedPhotos = [];
   for (const file of req.files) {
-    const fileUrl = await storageService.saveFile({
+    const saved = await storageService.saveFile({
       buffer: file.buffer,
       originalname: file.originalname,
       mimetype: file.mimetype,
     });
-    uploadedUrls.push(fileUrl);
+    uploadedPhotos.push({
+      id: saved.id || crypto.randomUUID(),
+      url: saved.url || saved.toString(),
+      publicId: saved.publicId || null,
+    });
   }
 
-  donation.photos.push(...uploadedUrls);
+  donation.photos.push(...uploadedPhotos);
   await donation.save();
 
   return ApiResponse.send(
     res,
     200,
     'Photos uploaded successfully',
+    toDonationView(donation, req.user)
+  );
+});
+
+/**
+ * DELETE /api/v1/donations/:id/photos/:photoId
+ * Remove a specific photo from an available donation.
+ * Allowed ONLY for owner donor (or admin) while status is AVAILABLE with 0 acceptances.
+ */
+const deleteDonationPhoto = asyncHandler(async (req, res) => {
+  const { id, photoId } = req.params;
+
+  const donation = await Donation.findById(id).populate(
+    'donorId',
+    'name ratingAverage ratingCount phone'
+  );
+  if (!donation) {
+    throw new ApiError(404, ERROR_CODES.NOT_FOUND, `Donation with ID '${id}' not found`);
+  }
+
+  // 1. Ownership check (Donor owner or Admin)
+  const isOwner =
+    donation.donorId?._id?.toString() === req.user._id.toString() ||
+    donation.donorId?.toString() === req.user._id.toString();
+  const isAdmin = req.user.role === ROLES.ADMIN;
+  if (!isOwner && !isAdmin) {
+    throw new ApiError(
+      403,
+      ERROR_CODES.FORBIDDEN,
+      'Only the posting donor can remove photos from this donation'
+    );
+  }
+
+  // 2. Status invariant check (AVAILABLE only, no acceptances)
+  if (
+    donation.status !== DONATION_STATUS.AVAILABLE ||
+    (donation.acceptances && donation.acceptances.length > 0)
+  ) {
+    throw new ApiError(
+      409,
+      ERROR_CODES.INVALID_STATUS_TRANSITION,
+      `Cannot delete photos from a donation in status '${donation.status}'. Photos can only be removed while status is AVAILABLE with zero claims.`
+    );
+  }
+
+  // 3. Find photo index by id or url match
+  const photoIndex = (donation.photos || []).findIndex(
+    (p) => (p.id && p.id === photoId) || (p.url && p.url.includes(photoId))
+  );
+
+  if (photoIndex === -1) {
+    throw new ApiError(
+      404,
+      ERROR_CODES.NOT_FOUND,
+      `Photo with ID '${photoId}' not found on this donation`
+    );
+  }
+
+  const [removedPhoto] = donation.photos.splice(photoIndex, 1);
+
+  // 4. Delete the physical / remote asset
+  await storageService.deleteFile(removedPhoto.url, removedPhoto.publicId).catch((err) => {
+    console.error(`[Storage Warning] Failed to delete photo asset: ${err.message}`);
+  });
+
+  await donation.save();
+
+  return ApiResponse.send(
+    res,
+    200,
+    'Photo deleted successfully',
     toDonationView(donation, req.user)
   );
 });
@@ -601,4 +683,5 @@ module.exports = {
   cancelDonation,
   getStatusHistory,
   uploadDonationPhotos,
+  deleteDonationPhoto,
 };

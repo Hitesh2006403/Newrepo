@@ -12,7 +12,9 @@ const { DONATION_STATUS } = require('../src/constants/status');
 const ERROR_CODES = require('../src/constants/errorCodes');
 const authService = require('../src/services/authService');
 const { createUrgencyNotifications } = require('../src/services/notificationService');
-const { validateProductionEnv } = require('../server');
+const sharp = require('sharp');
+const { CloudinaryStorageAdapter } = require('../src/services/cloudinaryStorageAdapter');
+const { validateProductionEnv, validateStorageConfig } = require('../server');
 
 describe('Extras & Advanced Security Features Suite', () => {
   let donorUser, donorToken;
@@ -20,13 +22,76 @@ describe('Extras & Advanced Security Features Suite', () => {
   let recipientUser, recipientToken;
   let adminUser, adminToken;
 
-  const validJpegBuffer = Buffer.from([
-    0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
-  ]);
-  const validPngBuffer = Buffer.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
-  ]);
+  let validJpegBuffer;
+  let validPngBuffer;
+  let gpsJpegBuffer;
+  let oversizedDimensionsBuffer;
+  let corruptedImageBuffer;
+
   const fakeImageBuffer = Buffer.from('This is definitely malicious text pretending to be an image!');
+
+  beforeAll(async () => {
+    validJpegBuffer = await sharp({
+      create: {
+        width: 50,
+        height: 50,
+        channels: 3,
+        background: { r: 255, g: 0, b: 0 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+
+    validPngBuffer = await sharp({
+      create: {
+        width: 50,
+        height: 50,
+        channels: 4,
+        background: { r: 0, g: 255, b: 0, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    gpsJpegBuffer = await sharp({
+      create: {
+        width: 50,
+        height: 50,
+        channels: 3,
+        background: { r: 0, g: 0, b: 255 },
+      },
+    })
+      .withExif({
+        IFD0: {
+          Make: 'Apple',
+          Model: 'iPhone 15 Pro',
+        },
+        GPSInfo: {
+          GPSLatitude: '12/1 58/1 0/1',
+          GPSLatitudeRef: 'N',
+          GPSLongitude: '77/1 35/1 0/1',
+          GPSLongitudeRef: 'E',
+        },
+      })
+      .jpeg()
+      .toBuffer();
+
+    oversizedDimensionsBuffer = await sharp({
+      create: {
+        width: 8001,
+        height: 10,
+        channels: 3,
+        background: { r: 255, g: 255, b: 255 },
+      },
+    })
+      .jpeg()
+      .toBuffer();
+
+    corruptedImageBuffer = Buffer.concat([
+      Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]),
+      Buffer.from('CORRUPTED_NON_DECODABLE_DATA_PAYLOAD'),
+    ]);
+  });
 
   const createTestDonation = async (donorId, overrides = {}) => {
     const now = new Date();
@@ -247,10 +312,10 @@ describe('Extras & Advanced Security Features Suite', () => {
   });
 
   // ============================================================================
-  // 2. PHOTO UPLOADS & RESTRICTED STATIC SERVING
+  // 2. PHOTO UPLOADS, HARDENING & FILE PROTECTION
   // ============================================================================
-  describe('2. Photo Uploads & File Protection', () => {
-    it('successfully uploads valid JPEG photo and updates donation photos array', async () => {
+  describe('2. Photo Uploads, Hardening & File Protection', () => {
+    it('successfully uploads valid JPEG photo and updates donation photos array with { id, url }', async () => {
       const donation = await createTestDonation(donorUser._id);
 
       const res = await request(app)
@@ -261,17 +326,44 @@ describe('Extras & Advanced Security Features Suite', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.photos.length).toBe(1);
-      expect(res.body.data.photos[0]).toMatch(/^\/uploads\/[a-zA-Z0-9_-]+\.jpg$/);
+      expect(res.body.data.photos[0].id).toBeDefined();
+      expect(res.body.data.photos[0].url).toMatch(/^\/uploads\/[a-zA-Z0-9_-]+\.jpg$/);
+      // internal publicId should never leak in API output
+      expect(res.body.data.photos[0].publicId).toBeUndefined();
 
-      // Verify file is persisted in DB
+      // Verify file is persisted in DB with publicId
       const updated = await Donation.findById(donation._id);
       expect(updated.photos.length).toBe(1);
-      expect(updated.photos[0]).toBe(res.body.data.photos[0]);
+      expect(updated.photos[0].url).toBe(res.body.data.photos[0].url);
+      expect(updated.photos[0].publicId).toBeDefined();
 
-      // Verify static route serves the uploaded file
-      const staticRes = await request(app).get(res.body.data.photos[0]);
+      // Verify static route serves the uploaded file with security headers
+      const staticRes = await request(app).get(res.body.data.photos[0].url);
       expect(staticRes.status).toBe(200);
       expect(staticRes.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    it('strips all EXIF, GPS, and camera metadata upon upload (privacy protection)', async () => {
+      // First verify the fixture buffer DOES contain EXIF/GPS metadata
+      const fixtureMetadata = await sharp(gpsJpegBuffer).metadata();
+      expect(fixtureMetadata.exif).toBeDefined();
+
+      const donation = await createTestDonation(donorUser._id);
+      const res = await request(app)
+        .post(`/api/v1/donations/${donation._id}/photos`)
+        .set('Authorization', `Bearer ${donorToken}`)
+        .attach('photos', gpsJpegBuffer, 'with_gps.jpg');
+
+      expect(res.status).toBe(200);
+      const photoUrl = res.body.data.photos[0].url;
+
+      // Fetch the served file from disk via the static endpoint
+      const staticRes = await request(app).get(photoUrl);
+      expect(staticRes.status).toBe(200);
+
+      // Verify EXIF and GPS tags are completely absent in the processed file
+      const processedMeta = await sharp(staticRes.body).metadata();
+      expect(processedMeta.exif).toBeUndefined();
     });
 
     it('rejects upload with spoofed magic bytes (fake text file named image.jpg)', async () => {
@@ -285,6 +377,34 @@ describe('Extras & Advanced Security Features Suite', () => {
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
       expect(res.body.error.code).toBe(ERROR_CODES.VALIDATION_ERROR);
+    });
+
+    it('rejects corrupted image file that passes magic bytes but fails decoding', async () => {
+      const donation = await createTestDonation(donorUser._id);
+
+      const res = await request(app)
+        .post(`/api/v1/donations/${donation._id}/photos`)
+        .set('Authorization', `Bearer ${donorToken}`)
+        .attach('photos', corruptedImageBuffer, 'corrupt.jpg');
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe(ERROR_CODES.VALIDATION_ERROR);
+      expect(res.body.error.message).toContain('Invalid or corrupted image file');
+    });
+
+    it('rejects image with oversized dimensions exceeding 8000x8000 (decompression bomb protection)', async () => {
+      const donation = await createTestDonation(donorUser._id);
+
+      const res = await request(app)
+        .post(`/api/v1/donations/${donation._id}/photos`)
+        .set('Authorization', `Bearer ${donorToken}`)
+        .attach('photos', oversizedDimensionsBuffer, 'huge_dimension.jpg');
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.error.code).toBe(ERROR_CODES.VALIDATION_ERROR);
+      expect(res.body.error.message).toContain('exceed maximum allowed dimensions');
     });
 
     it('rejects non-owner donor attempting photo upload', async () => {
@@ -324,7 +444,6 @@ describe('Extras & Advanced Security Features Suite', () => {
 
     it('rejects oversized image exceeding 2 MB limit', async () => {
       const donation = await createTestDonation(donorUser._id);
-      // Construct buffer > 2MB (2 * 1024 * 1024 + 10 bytes)
       const oversizedBuffer = Buffer.alloc(2 * 1024 * 1024 + 10, 0xff);
 
       const res = await request(app)
@@ -351,6 +470,83 @@ describe('Extras & Advanced Security Features Suite', () => {
       const nonExistentRes = await request(app).get('/uploads/00000000-0000-0000-0000-000000000000.jpg');
       expect(nonExistentRes.status).toBe(404);
       expect(nonExistentRes.body.error.code).toBe(ERROR_CODES.RESOURCE_NOT_FOUND);
+    });
+
+    describe('DELETE /api/v1/donations/:id/photos/:photoId Endpoint', () => {
+      it('allows owner donor to delete a photo from an AVAILABLE donation', async () => {
+        const donation = await createTestDonation(donorUser._id);
+
+        const uploadRes = await request(app)
+          .post(`/api/v1/donations/${donation._id}/photos`)
+          .set('Authorization', `Bearer ${donorToken}`)
+          .attach('photos', validJpegBuffer, 'delete_me.jpg');
+
+        expect(uploadRes.status).toBe(200);
+        const photoId = uploadRes.body.data.photos[0].id;
+        const photoUrl = uploadRes.body.data.photos[0].url;
+
+        // Verify photo exists statically
+        const beforeCheck = await request(app).get(photoUrl);
+        expect(beforeCheck.status).toBe(200);
+
+        // Delete photo
+        const delRes = await request(app)
+          .delete(`/api/v1/donations/${donation._id}/photos/${photoId}`)
+          .set('Authorization', `Bearer ${donorToken}`);
+
+        expect(delRes.status).toBe(200);
+        expect(delRes.body.success).toBe(true);
+        expect(delRes.body.data.photos.length).toBe(0);
+
+        // DB check
+        const inDb = await Donation.findById(donation._id);
+        expect(inDb.photos.length).toBe(0);
+
+        // Local asset removed from disk
+        const afterCheck = await request(app).get(photoUrl);
+        expect(afterCheck.status).toBe(404);
+      });
+
+      it('rejects non-owner donor from deleting photo with 403 FORBIDDEN', async () => {
+        const donation = await createTestDonation(donorUser._id);
+        const uploadRes = await request(app)
+          .post(`/api/v1/donations/${donation._id}/photos`)
+          .set('Authorization', `Bearer ${donorToken}`)
+          .attach('photos', validJpegBuffer, 'keep_me.jpg');
+
+        const photoId = uploadRes.body.data.photos[0].id;
+
+        const res = await request(app)
+          .delete(`/api/v1/donations/${donation._id}/photos/${photoId}`)
+          .set('Authorization', `Bearer ${otherDonorToken}`);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe(ERROR_CODES.FORBIDDEN);
+      });
+
+      it('returns 404 NOT_FOUND when photoId does not exist on donation', async () => {
+        const donation = await createTestDonation(donorUser._id);
+
+        const res = await request(app)
+          .delete(`/api/v1/donations/${donation._id}/photos/non-existent-photo-uuid`)
+          .set('Authorization', `Bearer ${donorToken}`);
+
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe(ERROR_CODES.NOT_FOUND);
+      });
+
+      it('rejects photo deletion with 409 when donation status is not AVAILABLE or has claims', async () => {
+        const donation = await createTestDonation(donorUser._id, {
+          status: DONATION_STATUS.CANCELLED,
+        });
+
+        const res = await request(app)
+          .delete(`/api/v1/donations/${donation._id}/photos/some-id`)
+          .set('Authorization', `Bearer ${donorToken}`);
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe(ERROR_CODES.INVALID_STATUS_TRANSITION);
+      });
     });
   });
 
@@ -600,6 +796,115 @@ describe('Extras & Advanced Security Features Suite', () => {
           QR_SIGNING_SECRET: 'qr_secure_signing_secret_production_key_456789',
         });
       }).not.toThrow();
+    });
+  });
+
+  // ============================================================================
+  // 6. CLOUDINARY STORAGE ADAPTER & CONFIGURATION SUITE
+  // ============================================================================
+  describe('6. Cloudinary Storage Adapter & Configuration Suite', () => {
+    it('throws fail-fast Error in CloudinaryStorageAdapter when credentials are missing', () => {
+      expect(() => {
+        new CloudinaryStorageAdapter({
+          cloudName: '',
+          apiKey: '',
+          apiSecret: '',
+        });
+      }).toThrow(/Storage Fatal/);
+    });
+
+    it('throws fail-fast Error in CloudinaryStorageAdapter when credentials contain "change-me"', () => {
+      expect(() => {
+        new CloudinaryStorageAdapter({
+          cloudName: 'change-me',
+          apiKey: 'change-me',
+          apiSecret: 'change-me',
+        });
+      }).toThrow(/Storage Fatal/);
+    });
+
+    it('throws in validateStorageConfig when STORAGE_PROVIDER=cloudinary with invalid credentials', () => {
+      expect(() => {
+        validateStorageConfig({
+          STORAGE_PROVIDER: 'cloudinary',
+          CLOUDINARY_CLOUD_NAME: 'change-me',
+          CLOUDINARY_API_KEY: 'abc',
+          CLOUDINARY_API_SECRET: 'def',
+        });
+      }).toThrow(/Fatal Startup Guard/);
+    });
+
+    it('passes validateStorageConfig when STORAGE_PROVIDER=cloudinary with valid non-placeholder credentials', () => {
+      expect(() => {
+        validateStorageConfig({
+          STORAGE_PROVIDER: 'cloudinary',
+          CLOUDINARY_CLOUD_NAME: 'real-cloud',
+          CLOUDINARY_API_KEY: 'real-key-12345',
+          CLOUDINARY_API_SECRET: 'real-secret-67890',
+        });
+      }).not.toThrow();
+    });
+
+    it('passes validateStorageConfig when STORAGE_PROVIDER=local regardless of cloudinary envs', () => {
+      expect(() => {
+        validateStorageConfig({
+          STORAGE_PROVIDER: 'local',
+        });
+      }).not.toThrow();
+    });
+
+    it('successfully uploads and sanitizes via mocked Cloudinary upload_stream', async () => {
+      const cloudinary = require('cloudinary').v2;
+
+      // Mock upload_stream to return a controlled result without external network calls
+      const originalUploadStream = cloudinary.uploader.upload_stream;
+      cloudinary.uploader.upload_stream = jest.fn((options, callback) => {
+        const { Writable } = require('stream');
+        const mockStream = new Writable({
+          write(chunk, encoding, next) {
+            next();
+          },
+        });
+        mockStream.on('finish', () => {
+          callback(null, {
+            secure_url:
+              'https://res.cloudinary.com/demo/image/upload/v1234567890/shareaplate/donations/donation_test.jpg',
+            public_id: 'shareaplate/donations/donation_test',
+            format: 'jpg',
+          });
+        });
+        return mockStream;
+      });
+
+      const adapter = new CloudinaryStorageAdapter({
+        cloudName: 'test-cloud',
+        apiKey: 'test-key-123',
+        apiSecret: 'test-secret-456',
+      });
+
+      const result = await adapter.saveFile({
+        buffer: validJpegBuffer,
+        originalname: 'meal.jpg',
+        mimetype: 'image/jpeg',
+      });
+
+      expect(result).toHaveProperty('id');
+      expect(result.url).toBe(
+        'https://res.cloudinary.com/demo/image/upload/v1234567890/shareaplate/donations/donation_test.jpg'
+      );
+      expect(result.publicId).toBe('shareaplate/donations/donation_test');
+      expect(cloudinary.uploader.upload_stream).toHaveBeenCalled();
+
+      // Test deleteFile
+      const originalDestroy = cloudinary.uploader.destroy;
+      cloudinary.uploader.destroy = jest.fn().mockResolvedValue({ result: 'ok' });
+
+      await adapter.deleteFile(result.url, result.publicId);
+      expect(cloudinary.uploader.destroy).toHaveBeenCalledWith('shareaplate/donations/donation_test');
+
+      // Restore mocks
+      cloudinary.uploader.upload_stream = originalUploadStream;
+      cloudinary.uploader.destroy = originalDestroy;
     });
   });
 });

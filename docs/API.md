@@ -161,6 +161,7 @@ All failure responses follow the standard JSON error envelope (`success: false, 
 | `/api/v1/donations/:id` | GET | ❌ | ✅ | ✅ | ✅ | ✅ | PII redacted unless donor, admin, or attached recipient/driver |
 | `/api/v1/donations/:id` | PATCH | ❌ | ✅ | ❌ | ❌ | ✅ | Owner only; allowed ONLY when status = `AVAILABLE` and 0 acceptances |
 | `/api/v1/donations/:id/photos` | POST | ❌ | ✅ | ❌ | ❌ | ❌ | Donor owner only; allowed ONLY when status = `AVAILABLE` and 0 acceptances |
+| `/api/v1/donations/:id/photos/:photoId` | DELETE | ❌ | ✅ | ❌ | ❌ | ❌ | Donor owner only; allowed ONLY when status = `AVAILABLE` and 0 acceptances |
 | `/api/v1/donations/:id/cancel` | POST | ❌ | ✅ | ❌ | ❌ | ✅ | Owner only; before pickup |
 | `/api/v1/donations/:id/status-history`| GET | ❌ | ✅ | ✅ | ✅ | ✅ | Parties attached to donation |
 | `/api/v1/donations/:id/accept` | POST | ❌ | ❌ | ✅ | ❌ | ✅ | **Verified** recipients only *(Member 3 stub)* |
@@ -452,8 +453,13 @@ All failure responses follow the standard JSON error envelope (`success: false, 
 * **Content-Type**: `multipart/form-data`
 * **Form Field**: `photos` (up to 5 files, maximum 2 MB per file)
 * **Allowed MIME Types**: `image/jpeg`, `image/png`, `image/webp` (strictly verified by real magic byte signatures).
+* **Server-Side Security & Privacy Hardening**:
+  - **EXIF & GPS Stripping**: Every uploaded image is automatically decoded and re-encoded using `sharp` server-side before storage. ALL EXIF metadata, GPS coordinates, device models, and camera tags are permanently stripped.
+  - **Auto-Rotation**: Images are auto-rotated based on original EXIF orientation before stripping.
+  - **Dimension Capping**: The longest side of the image is capped at 1600 px without enlargement.
+  - **Decompression Bomb Guard**: Pixel dimensions are strictly capped at 8000x8000 px to mitigate decompression memory exhaustion attacks.
 * **Storage & Serving**:
-  - Saved using random UUID filenames in `backend/uploads/` via `storageService.js` adapter.
+  - Saved using random UUID filenames in `backend/uploads/` (local) or streamed to Cloudinary CDN (`STORAGE_PROVIDER=cloudinary`).
   - Served via restricted route `GET /uploads/:filename` or `GET /api/v1/uploads/:filename` (hardened against path traversal, sends `X-Content-Type-Options: nosniff`).
 * **Response (200 OK)**:
 ```json
@@ -461,13 +467,42 @@ All failure responses follow the standard JSON error envelope (`success: false, 
   "success": true,
   "message": "Photos uploaded successfully",
   "data": {
+    "id": "6707c91fb12345678901234b",
     "photos": [
-      "/uploads/c8a34fcb-7f32-4d2b-b6b8-29472e391cb4.jpg"
-    ],
-    "totalPhotos": 1
+      {
+        "id": "c8a34fcb-7f32-4d2b-b6b8-29472e391cb4",
+        "url": "/uploads/c8a34fcb-7f32-4d2b-b6b8-29472e391cb4.jpg"
+      }
+    ]
   }
 }
 ```
+
+#### 10. Delete Donation Photo
+* **Method & Path**: `DELETE /api/v1/donations/:id/photos/:photoId`
+* **Auth**: Bearer Token (`donor` owner only)
+* **Preconditions**:
+  1. Donation must exist and `donorId === req.user.id`.
+  2. Status must be `AVAILABLE`.
+  3. No claims exist (`acceptances.length === 0`).
+  4. Photo with `photoId` exists on this donation.
+* **Behavior**: Removes the photo record from `donation.photos` and unlinks the local file or destroys the remote Cloudinary asset.
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "Photo deleted successfully",
+  "data": {
+    "id": "6707c91fb12345678901234b",
+    "photos": []
+  }
+}
+```
+
+> **FRONTEND CONTRACT NOTE FOR MEMBER 1 (React Frontend)**:
+> In all endpoints returning donation data (`GET /donations/:id`, `GET /donations`, `GET /donations/available`, `POST /donations/:id/photos`), the `photos` field is now an array of objects `[{ id: string, url: string }]` instead of an array of plain strings.
+> * To render: `<img src={photo.url} alt="Donation" />`
+> * To delete: `DELETE /api/v1/donations/${donation.id}/photos/${photo.id}`
 
 ---
 

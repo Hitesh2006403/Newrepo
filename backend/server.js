@@ -9,6 +9,40 @@ let server;
 let sweeperInterval;
 
 /**
+ * Validates that Cloudinary credentials are fully specified if STORAGE_PROVIDER is set to cloudinary.
+ * Enforces fail-fast behavior across all environments.
+ *
+ * @param {Object} [env=process.env]
+ * @throws {Error} If STORAGE_PROVIDER=cloudinary and credentials are missing or placeholders
+ */
+const validateStorageConfig = (env = process.env) => {
+  const provider = (env.STORAGE_PROVIDER || 'local').toLowerCase();
+  if (provider === 'cloudinary') {
+    const requiredVars = [
+      'CLOUDINARY_CLOUD_NAME',
+      'CLOUDINARY_API_KEY',
+      'CLOUDINARY_API_SECRET',
+    ];
+    const missing = [];
+    for (const varName of requiredVars) {
+      const val = env[varName];
+      if (!val || typeof val !== 'string' || val.trim() === '') {
+        missing.push(`${varName} is missing`);
+      } else if (val.toLowerCase().includes('change-me')) {
+        missing.push(`${varName} still contains placeholder "change-me"`);
+      }
+    }
+    if (missing.length > 0) {
+      throw new Error(
+        `[Fatal Startup Guard] STORAGE_PROVIDER is set to "cloudinary" but required credentials are missing or invalid:\n - ${missing.join(
+          '\n - '
+        )}`
+      );
+    }
+  }
+};
+
+/**
  * Validates that all critical secrets and configuration parameters are configured
  * securely when running in production mode.
  *
@@ -49,6 +83,7 @@ const validateProductionEnv = (env = process.env) => {
 const startServer = async () => {
   try {
     validateProductionEnv();
+    validateStorageConfig();
     await connectDB();
     sweeperInterval = startExpirySweeper(300000); // 5 minutes
     server = app.listen(PORT, () => {
@@ -103,4 +138,5 @@ module.exports = {
   server,
   startServer,
   validateProductionEnv,
+  validateStorageConfig,
 };

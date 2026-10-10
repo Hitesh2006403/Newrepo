@@ -81,6 +81,12 @@ router.post(
   donationController.uploadDonationPhotos
 );
 
+// DELETE /api/v1/donations/:id/photos/:photoId - Remove photo from donation (Owner donor only)
+router.delete(
+  '/:id/photos/:photoId',
+  donationController.deleteDonationPhoto
+);
+
 // GET /api/v1/donations/:id - Single donation view with role-scoped PII redaction
 router.get(
   '/:id',

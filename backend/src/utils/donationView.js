@@ -107,6 +107,21 @@ const toDonationView = (donationDoc, viewer = null, viewerLocationOrDistance = n
     donation.donorPhone = canViewFullPII ? donation.donorPhone || null : null;
   }
 
+  // Format photos safely as [{ id, url }] (strips internal publicId)
+  if (Array.isArray(donation.photos)) {
+    donation.photos = donation.photos.map((p) => {
+      if (typeof p === 'string') {
+        return { id: p, url: p };
+      }
+      return {
+        id: p.id || (p._id ? p._id.toString() : p.url),
+        url: p.url,
+      };
+    });
+  } else {
+    donation.photos = [];
+  }
+
   // Set area label on donation for all viewers
   const safeArea =
     donation.areaLabel ||

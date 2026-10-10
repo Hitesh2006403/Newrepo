@@ -41,7 +41,19 @@ const createDonationSchema = z
     pickupWindowEnd: z.coerce.date(),
     packagingType: z.enum(['sealed_containers', 'loose_packets', 'bulk_vessel']).optional().default('sealed_containers'),
     instructions: z.string().trim().max(500).optional(),
-    photos: z.array(z.string().url('Photos must be valid URLs')).max(5, 'Maximum 5 photos allowed').optional().default([]),
+    photos: z
+      .array(
+        z.union([
+          z.string().trim().min(1),
+          z.object({
+            id: z.string().optional(),
+            url: z.string().trim().min(1),
+          }),
+        ])
+      )
+      .max(5, 'Maximum 5 photos allowed')
+      .optional()
+      .default([]),
     location: locationSchema,
     address: addressSchema,
     areaLabel: z.string().trim().max(100).optional(),
@@ -116,7 +128,18 @@ const updateDonationSchema = z
     packagingType: z.enum(['sealed_containers', 'loose_packets', 'bulk_vessel']).optional(),
     instructions: z.string().trim().max(500).optional(),
     pickupWindowEnd: z.coerce.date().optional(),
-    photos: z.array(z.string().url()).max(5).optional(),
+    photos: z
+      .array(
+        z.union([
+          z.string().trim().min(1),
+          z.object({
+            id: z.string().optional(),
+            url: z.string().trim().min(1),
+          }),
+        ])
+      )
+      .max(5)
+      .optional(),
     areaLabel: z.string().trim().max(100).optional(),
   })
   .strict();

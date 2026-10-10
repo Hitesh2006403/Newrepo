@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 const { DONATION_STATUS } = require('../constants/status');
 const AcceptanceSchema = require('./Acceptance');
 
@@ -21,6 +22,26 @@ const StatusHistorySchema = new mongoose.Schema(
     timestamp: {
       type: Date,
       default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
+const PhotoSchema = new mongoose.Schema(
+  {
+    id: {
+      type: String,
+      required: true,
+      default: () => crypto.randomUUID(),
+    },
+    url: {
+      type: String,
+      required: [true, 'Photo URL is required'],
+      trim: true,
+    },
+    publicId: {
+      type: String,
+      default: null,
     },
   },
   { _id: false }
@@ -109,7 +130,23 @@ const DonationSchema = new mongoose.Schema(
       default: null,
     },
     photos: {
-      type: [String],
+      type: [PhotoSchema],
+      set: function (val) {
+        if (!Array.isArray(val)) return val;
+        return val.map((p) => {
+          if (typeof p === 'string') {
+            return { id: crypto.randomUUID(), url: p, publicId: null };
+          }
+          if (p && typeof p === 'object' && !p.id) {
+            return {
+              id: crypto.randomUUID(),
+              url: p.url,
+              publicId: p.publicId || null,
+            };
+          }
+          return p;
+        });
+      },
       validate: [
         (val) => val.length <= 5,
         'Cannot upload more than 5 photos per donation',
@@ -162,6 +199,25 @@ const DonationSchema = new mongoose.Schema(
     toObject: { virtuals: true },
   }
 );
+
+// Transform strings or loose objects to standard PhotoSchema shape before validation
+DonationSchema.pre('validate', function () {
+  if (Array.isArray(this.photos)) {
+    this.photos = this.photos.map((p) => {
+      if (typeof p === 'string') {
+        return { id: crypto.randomUUID(), url: p, publicId: null };
+      }
+      if (p && typeof p === 'object' && !p.id) {
+        return {
+          id: crypto.randomUUID(),
+          url: p.url,
+          publicId: p.publicId || null,
+        };
+      }
+      return p;
+    });
+  }
+});
 
 // Indexes
 DonationSchema.index({ location: '2dsphere' });

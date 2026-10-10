@@ -26,6 +26,10 @@ Before deploying to production (Render, Railway, Heroku, AWS, or DigitalOcean), 
 | `SAFETY_BUFFER_MINUTES_DEFAULT` | No | Food consumption expiry buffer in minutes (defaults to `60`). |
 | `URGENCY_THRESHOLD_MINUTES` | No | Lead-time threshold for expiring-soon alerts (defaults to `30`). |
 | `UPLOAD_MAX_SIZE_BYTES` | No | Maximum photo file upload limit in bytes (defaults to `2097152` = 2 MB). |
+| `STORAGE_PROVIDER` | No | Set to `cloudinary` in production, or `local` for local dev/testing (defaults to `local`). |
+| `CLOUDINARY_CLOUD_NAME` | If Cloudinary | Cloudinary cloud name. Required when `STORAGE_PROVIDER=cloudinary`. |
+| `CLOUDINARY_API_KEY` | If Cloudinary | Cloudinary API access key. Required when `STORAGE_PROVIDER=cloudinary`. |
+| `CLOUDINARY_API_SECRET` | If Cloudinary | Cloudinary API secret. Required when `STORAGE_PROVIDER=cloudinary`. |
 | `QR_SIGNING_SECRET` | Yes | Secret key used to sign and verify member pickup QR tokens. Must not contain `"change-me"`. |
 | `MAPS_API_KEY` | No | Google Maps / Mapbox API key for geocoding services. |
 
@@ -80,7 +84,28 @@ For staging environments or initial production bootstrap:
 
 ---
 
-## 5. Reverse Proxy & Network Configuration
+## 5. Persistent Media Storage (Cloudinary vs Local Ephemeral Storage)
+
+* **Ephemeral Local Storage Warning**: On cloud application platforms (such as Render, Railway, Heroku, or AWS Fargate), container filesystems are strictly **ephemeral**. Any files saved to local disk (`backend/uploads/`) are destroyed when containers restart, deploy, or sleep.
+* **Production Requirement**: For live staging and production deployments, configure `STORAGE_PROVIDER=cloudinary` along with `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET`.
+* **Automatic EXIF/GPS Privacy Scrubbing**: Regardless of the storage provider selected, all uploaded donation images are decoded and re-encoded server-side via `sharp` before storage:
+  - All EXIF metadata, GPS latitude/longitude tags, and camera identifiers are stripped.
+  - Images are auto-rotated based on original EXIF orientation before stripping.
+  - Image dimensions are capped at 1600 px maximum on the longest edge.
+  - Decompression-bomb attacks are mitigated by capping input dimensions at 8000x8000 px.
+
+---
+
+## 6. AI Voice Telephony & Contact Privacy Guidelines
+
+* **Dynamic Phone Number Resolution**: Automated urgent AI voice calls (via Twilio, Bland AI, or mock provider) must **always** read recipient telephone numbers dynamically from the verified `User` record at dispatch time (`User.findById(userId).phone`).
+* **Never Persist Raw Phone Numbers**:
+  - The `VoiceCall` model and audit logs store strictly masked phone strings (e.g., `+91******3210`).
+  - Raw telephone numbers must **never** be logged to `console.log`, stdout, error traces, or stored in persistent voice call records.
+
+---
+
+## 7. Reverse Proxy & Network Configuration
 
 If running behind reverse proxies (Nginx, AWS ALB, Cloudflare, Render):
 - Set `TRUST_PROXY=1`.
@@ -90,7 +115,7 @@ If running behind reverse proxies (Nginx, AWS ALB, Cloudflare, Render):
 
 ---
 
-## 6. Pre-Flight Verification Checklist
+## 8. Pre-Flight Verification Checklist
 
 Run these automated verification steps prior to promoting a build to production:
 
