@@ -150,6 +150,7 @@ All failure responses follow the standard JSON error envelope (`success: false, 
 | Endpoint | Method | Public | Donor | Recipient | Delivery Agent | Admin | Ownership & Rule Constraints |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
 | `/api/v1/health` | GET | ✅ | ✅ | ✅ | ✅ | ✅ | No auth required |
+| `/api/v1/meta` | GET | ✅ | ✅ | ✅ | ✅ | ✅ | System enums & metadata for frontend (no auth required) |
 | `/api/v1/auth/register` | POST | ✅ | ❌ | ❌ | ❌ | ❌ | Allowed roles: donor, recipient, delivery_agent |
 | `/api/v1/auth/login` | POST | ✅ | ❌ | ❌ | ❌ | ❌ | Unauthenticated |
 | `/api/v1/auth/logout` | POST | ❌ | ✅ | ✅ | ✅ | ✅ | Any authenticated session |
@@ -207,6 +208,38 @@ All failure responses follow the standard JSON error envelope (`success: false, 
     "status": "UP",
     "uptime": 1420,
     "timestamp": "2026-10-10T12:00:00.000Z"
+  }
+}
+```
+
+#### 2. System Metadata & Enumerations
+* **Method & Path**: `GET /api/v1/meta`
+* **Auth**: Public (No auth required)
+* **Purpose**: Serves active domain enumerations, food types, units, dietary options, and default parameters directly to the frontend, preventing client-side hardcoding.
+* **Response (200 OK)**:
+```json
+{
+  "success": true,
+  "message": "System metadata and enumerations retrieved",
+  "data": {
+    "roles": ["donor", "recipient", "delivery_agent", "admin"],
+    "donationStatuses": [
+      "AVAILABLE", "PARTIALLY_ACCEPTED", "ACCEPTED", "PICKUP_SCHEDULED",
+      "PICKED_UP", "HANDOVER_VERIFIED", "COMPLETED", "CANCELLED",
+      "REOPENED", "EXPIRED", "REMATCHING"
+    ],
+    "acceptanceStatuses": [
+      "CLAIMED", "PICKUP_SCHEDULED", "PICKED_UP", "HANDOVER_VERIFIED",
+      "COMPLETED", "CANCELLED", "REJECTED_UNSAFE"
+    ],
+    "requirementStatuses": [
+      "OPEN", "PARTIALLY_FULFILLED", "FULFILLED", "EXPIRED", "CANCELLED"
+    ],
+    "foodTypes": ["cooked_meals", "raw_groceries", "packaged_food", "bakery_items"],
+    "units": ["plates", "kg", "packets", "servings"],
+    "dietaryTypes": ["vegetarian", "non_vegetarian", "vegan", "any"],
+    "urgencyLevels": ["NORMAL", "URGENT", "CRITICAL", "EXPIRED"],
+    "defaultSafetyBufferMinutes": 60
   }
 }
 ```

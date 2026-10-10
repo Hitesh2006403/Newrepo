@@ -1,0 +1,1111 @@
+{
+  "info": {
+    "name": "Share A Plate API Collection",
+    "description": "Complete Postman API Collection for Share A Plate - Surplus Food Rescue Platform. Covers Authentication, Donations, Photos, Requirements, Dashboards, Notifications, Admin, and Meta endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. System & Meta",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Public health and liveness check returning uptime and status."
+          }
+        },
+        {
+          "name": "System Metadata & Enumerations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/meta",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "meta"
+              ]
+            },
+            "description": "Public system enumerations (roles, statuses, units, food types, dietary preferences)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Register User (Donor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var res = pm.response.json();",
+                  "    pm.environment.set(\"token\", res.data.token);",
+                  "    pm.environment.set(\"donorToken\", res.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Anand Kitchens\",\n  \"email\": \"anand.kitchen@demo.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"donor\",\n  \"phone\": \"+919876543210\",\n  \"location\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n      77.5946,\n      12.9716\n    ]\n  },\n  \"address\": {\n    \"street\": \"12 MG Road\",\n    \"city\": \"Bengaluru\",\n    \"state\": \"Karnataka\",\n    \"postalCode\": \"560001\",\n    \"formattedAddress\": \"12 MG Road, Bengaluru, Karnataka 560001\"\n  },\n  \"organization\": {\n    \"name\": \"Anand Caterers Pvt Ltd\",\n    \"regNo\": \"REG-BLR-1234\",\n    \"capacity\": 200\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Register User (Recipient - Unverified)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var res = pm.response.json();",
+                  "    pm.environment.set(\"recipientToken\", res.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Mercy Children Care\",\n  \"email\": \"mercy.home@demo.test\",\n  \"password\": \"Password123!\",\n  \"role\": \"recipient\",\n  \"phone\": \"+919876543211\",\n  \"location\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n      77.6101,\n      12.9352\n    ]\n  },\n  \"address\": {\n    \"street\": \"45 Hosur Road\",\n    \"city\": \"Bengaluru\",\n    \"state\": \"Karnataka\",\n    \"postalCode\": \"560029\",\n    \"formattedAddress\": \"45 Hosur Road, Bengaluru, Karnataka 560029\"\n  },\n  \"organization\": {\n    \"name\": \"Mercy Foundation Trust\",\n    \"regNo\": \"NGO-BLR-9876\",\n    \"capacity\": 60\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    pm.environment.set(\"adminToken\", res.data.token);",
+                  "    pm.environment.set(\"token\", res.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@shareaplate.test\",\n  \"password\": \"REPLACE_WITH_YOUR_SEED_ADMIN_PASSWORD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login (Donor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    pm.environment.set(\"donorToken\", res.data.token);",
+                  "    pm.environment.set(\"token\", res.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"donor@grandroyal.com\",\n  \"password\": \"REPLACE_WITH_YOUR_SEED_DEMO_PASSWORD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login (Recipient)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    pm.environment.set(\"recipientToken\", res.data.token);",
+                  "    pm.environment.set(\"token\", res.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"recipient@sunshine.org\",\n  \"password\": \"REPLACE_WITH_YOUR_SEED_DEMO_PASSWORD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login (Delivery Agent)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    pm.environment.set(\"deliveryAgentToken\", res.data.token);",
+                  "    pm.environment.set(\"token\", res.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"agent@delivery.com\",\n  \"password\": \"REPLACE_WITH_YOUR_SEED_DEMO_PASSWORD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Current Profile (Me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Donations",
+      "item": [
+        {
+          "name": "Create Donation (Donor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var res = pm.response.json();",
+                  "    pm.environment.set(\"donationId\", res.data.id || res.data._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{donorToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"foodName\": \"Vegetable Pulao & Raita Packets\",\n  \"foodType\": \"cooked_meals\",\n  \"dietaryType\": \"vegetarian\",\n  \"totalQuantity\": 35,\n  \"unit\": \"plates\",\n  \"cookedAt\": \"2026-10-10T15:05:15.005Z\",\n  \"expiryAt\": \"2026-10-10T19:35:15.008Z\",\n  \"safetyBufferMinutes\": 60,\n  \"pickupWindowStart\": \"2026-10-10T15:50:15.008Z\",\n  \"pickupWindowEnd\": \"2026-10-10T18:05:15.008Z\",\n  \"packagingType\": \"sealed_containers\",\n  \"instructions\": \"Collect from rear loading bay; ring bell\",\n  \"location\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n      77.6412,\n      12.9784\n    ]\n  },\n  \"address\": {\n    \"street\": \"12 100ft Road\",\n    \"city\": \"Bengaluru\",\n    \"state\": \"Karnataka\",\n    \"postalCode\": \"560038\",\n    \"formattedAddress\": \"12 100ft Road, Indiranagar, Bengaluru, Karnataka 560038\"\n  },\n  \"areaLabel\": \"Indiranagar Hub, Bengaluru\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/donations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "donations"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Available Donations (Recipient / Agent)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{recipientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/donations/available?foodType=cooked_meals&dietaryType=vegetarian&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "donations",
+                "available"
+              ],
+              "query": [
+                {
+                  "key": "foodType",
+                  "value": "cooked_meals"
+                },
+                {
+                  "key": "dietaryType",
+                  "value": "vegetarian"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List My Donations (Donor)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{donorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/donations/my?status=AVAILABLE&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "donations",
+                "my"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "AVAILABLE"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Donation By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/donations/{{donationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "donations",
+                "{{donationId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Donation (PATCH - Owner Donor)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{donorToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"foodName\": \"Vegetable Pulao & Refreshing Mint Raita\",\n  \"packagingType\": \"sealed_containers\",\n  \"instructions\": \"Use service lift; loading bay entrance B\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/donations/{{donationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "donations",
+                "{{donationId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Donation (Owner Donor)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{donorToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Kitchen temperature control malfunction\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/donations/{{donationId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "donations",
+                "{{donationId}}",
+                "cancel"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Status History Audit Trail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{donorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/donations/{{donationId}}/status-history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "donations",
+                "{{donationId}}",
+                "status-history"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Photos",
+      "item": [
+        {
+          "name": "Upload Donation Photos (Donor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data.photos && res.data.photos.length > 0) {",
+                  "        pm.environment.set(\"photoId\", res.data.photos[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{donorToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photos",
+                  "description": "Select up to 5 JPEG/PNG/WebP images (< 2MB each)",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/donations/{{donationId}}/photos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "donations",
+                "{{donationId}}",
+                "photos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Donation Photo (Donor)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{donorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/donations/{{donationId}}/photos/{{photoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "donations",
+                "{{donationId}}",
+                "photos",
+                "{{photoId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Requirements",
+      "item": [
+        {
+          "name": "Create Requirement (Verified Recipient)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var res = pm.response.json();",
+                  "    pm.environment.set(\"requirementId\", res.data.id || res.data._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{recipientToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Evening meal requirement for 45 children\",\n  \"foodType\": \"cooked_meals\",\n  \"quantityNeeded\": 45,\n  \"unit\": \"plates\",\n  \"dietaryPreference\": \"vegetarian\",\n  \"neededBy\": \"2026-10-10T19:35:15.008Z\",\n  \"urgency\": \"HIGH\",\n  \"location\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n      77.5998,\n      12.9345\n    ]\n  },\n  \"address\": {\n    \"street\": \"14 Bannerghatta Road\",\n    \"city\": \"Bengaluru\",\n    \"state\": \"Karnataka\",\n    \"postalCode\": \"560076\",\n    \"formattedAddress\": \"14 Bannerghatta Road, Bengaluru 560076\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/requirements",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requirements"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Requirements (Public / Filtered)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/requirements?status=OPEN&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requirements"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "OPEN"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Dashboards",
+      "item": [
+        {
+          "name": "Public Impact Metrics (Zero PII)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/impact",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "impact"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Donor Dashboard (Donor Only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{donorToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/donor",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "donor"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Recipient Dashboard (Verified Recipient Only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{recipientToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/recipient",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "recipient"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Notifications & Voice Calls",
+      "item": [
+        {
+          "name": "List In-App Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data.notifications && res.data.notifications.length > 0) {",
+                  "        pm.environment.set(\"notificationId\", res.data.notifications[0].id || res.data.notifications[0]._id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications?unread=true&page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "unread",
+                  "value": "true"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark Single Notification Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/{{notificationId}}/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "{{notificationId}}",
+                "read"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark All Notifications Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/read-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "read-all"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Trigger Automated Urgent Voice Call (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data.call && res.data.call.callId) {",
+                  "        pm.environment.set(\"callId\", res.data.call.callId);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"donationId\": \"{{donationId}}\",\n  \"reason\": \"Expiring in under 30 minutes with zero claims\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/notifications/ai-call",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "ai-call"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Voice Call Record (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/ai-call/{{callId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "ai-call",
+                "{{callId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Admin Governance",
+      "item": [
+        {
+          "name": "List Users (Admin Filtered)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var res = pm.response.json();",
+                  "    if (res.data.users && res.data.users.length > 0) {",
+                  "        pm.environment.set(\"userId\", res.data.users[0].id || res.data.users[0]._id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users?role=recipient&isVerified=false&page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "recipient"
+                },
+                {
+                  "key": "isVerified",
+                  "value": "false"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Verify User Account (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/{{userId}}/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users",
+                "{{userId}}",
+                "verify"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deactivate User Account (Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users/{{userId}}/deactivate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "users",
+                "{{userId}}",
+                "deactivate"
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Donations Feed with Countdown (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/admin/donations?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "donations"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

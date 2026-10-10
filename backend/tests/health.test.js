@@ -23,6 +23,59 @@ describe('System Health & Base Router Integration', () => {
     });
   });
 
+  describe('GET /api/v1/meta', () => {
+    it('should return 200 OK with all system enumerations without requiring authentication', async () => {
+      const res = await request(app).get('/api/v1/meta');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('success', true);
+      expect(res.body).toHaveProperty('data');
+
+      const { data } = res.body;
+
+      // Roles
+      expect(Array.isArray(data.roles)).toBe(true);
+      expect(data.roles).toContain('donor');
+      expect(data.roles).toContain('recipient');
+      expect(data.roles).toContain('delivery_agent');
+      expect(data.roles).toContain('admin');
+
+      // Donation statuses
+      expect(Array.isArray(data.donationStatuses)).toBe(true);
+      expect(data.donationStatuses).toContain('AVAILABLE');
+      expect(data.donationStatuses).toContain('COMPLETED');
+      expect(data.donationStatuses).toContain('CANCELLED');
+      expect(data.donationStatuses).toContain('EXPIRED');
+
+      // Acceptance statuses
+      expect(Array.isArray(data.acceptanceStatuses)).toBe(true);
+      expect(data.acceptanceStatuses).toContain('CLAIMED');
+      expect(data.acceptanceStatuses).toContain('COMPLETED');
+
+      // Requirement statuses
+      expect(Array.isArray(data.requirementStatuses)).toBe(true);
+      expect(data.requirementStatuses).toContain('OPEN');
+      expect(data.requirementStatuses).toContain('FULFILLED');
+
+      // Food types, units, dietary types, urgency levels
+      expect(Array.isArray(data.foodTypes)).toBe(true);
+      expect(data.foodTypes).toContain('cooked_meals');
+      expect(Array.isArray(data.units)).toBe(true);
+      expect(data.units).toContain('plates');
+      expect(Array.isArray(data.dietaryTypes)).toBe(true);
+      expect(data.dietaryTypes).toContain('vegetarian');
+      expect(Array.isArray(data.urgencyLevels)).toBe(true);
+      expect(data.urgencyLevels).toContain('URGENT');
+      expect(typeof data.defaultSafetyBufferMinutes).toBe('number');
+
+      // Zero PII check
+      const payloadStr = JSON.stringify(data);
+      expect(payloadStr).not.toContain('email');
+      expect(payloadStr).not.toContain('phone');
+      expect(payloadStr).not.toContain('password');
+    });
+  });
+
   describe('Unknown Route Handler (404)', () => {
     it('should return 404 NOT_FOUND with the standard error envelope', async () => {
       const res = await request(app).get('/api/v1/nonexistent-route');

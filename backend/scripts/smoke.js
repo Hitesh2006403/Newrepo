@@ -16,6 +16,7 @@
  *   Step 11: Public impact dashboard accessed without auth (zero PII)
  *   Step 12: Admin donation feed retrieved with countdown metrics
  *   Step 13: Deactivated user is locked out from API calls and login
+ *   Step 14: CORS preflight verification (CLIENT_URL allowed, foreign origin blocked)
  */
 
 // Set isolated test environment variables before any application module loads
@@ -536,8 +537,43 @@ async function main() {
       }
     });
 
+    // -------------------------------------------------------------------------
+    // Step 14: CORS preflight verification for CLIENT_URL & foreign origin
+    // -------------------------------------------------------------------------
+    await runStep(14, 'CORS preflight from CLIENT_URL allowed with multipart headers, foreign origin blocked', async () => {
+      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+
+      // 1. Preflight OPTIONS request from whitelisted CLIENT_URL with Authorization and multipart upload headers
+      const preflightRes = await request(app)
+        .options(`/api/v1/donations/${donation1Id}/photos`)
+        .set('Origin', clientUrl)
+        .set('Access-Control-Request-Method', 'POST')
+        .set('Access-Control-Request-Headers', 'authorization,content-type');
+
+      if (preflightRes.status !== 200 && preflightRes.status !== 204) {
+        throw new Error(`Expected preflight status 200/204, received ${preflightRes.status}`);
+      }
+
+      const allowOrigin = preflightRes.headers['access-control-allow-origin'];
+      if (allowOrigin !== clientUrl) {
+        throw new Error(`Expected Access-Control-Allow-Origin to be ${clientUrl}, got: ${allowOrigin}`);
+      }
+
+      // 2. Preflight request from unauthorized foreign origin
+      const foreignRes = await request(app)
+        .options(`/api/v1/donations/${donation1Id}/photos`)
+        .set('Origin', 'http://unauthorized-attacker.example')
+        .set('Access-Control-Request-Method', 'POST')
+        .set('Access-Control-Request-Headers', 'authorization,content-type');
+
+      const foreignAllowOrigin = foreignRes.headers['access-control-allow-origin'];
+      if (foreignAllowOrigin) {
+        throw new Error(`Expected foreign origin to be blocked, but Access-Control-Allow-Origin was set to: ${foreignAllowOrigin}`);
+      }
+    });
+
     console.log('\n======================================================');
-    console.log('  \x1b[32m✔ ALL 13 END-TO-END SMOKE TEST STEPS PASSED!\x1b[0m');
+    console.log('  \x1b[32m✔ ALL 14 END-TO-END SMOKE TEST STEPS PASSED!\x1b[0m');
     console.log('======================================================\n');
   } finally {
     await mongoose.disconnect();

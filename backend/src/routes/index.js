@@ -22,6 +22,32 @@ router.get('/health', (req, res) => {
   });
 });
 
+/**
+ * @route   GET /api/v1/meta
+ * @desc    System metadata and enumerations for frontend clients (no hardcoded enums)
+ * @access  Public
+ */
+const { ROLES } = require('../constants/roles');
+const {
+  DONATION_STATUS,
+  ACCEPTANCE_STATUS,
+  REQUIREMENT_STATUS,
+} = require('../constants/status');
+
+router.get('/meta', (req, res) => {
+  return ApiResponse.send(res, 200, 'System metadata and enumerations retrieved', {
+    roles: Object.values(ROLES),
+    donationStatuses: Object.values(DONATION_STATUS),
+    acceptanceStatuses: Object.values(ACCEPTANCE_STATUS),
+    requirementStatuses: Object.values(REQUIREMENT_STATUS),
+    foodTypes: ['cooked_meals', 'raw_groceries', 'packaged_food', 'bakery_items'],
+    units: ['plates', 'kg', 'packets', 'servings'],
+    dietaryTypes: ['vegetarian', 'non_vegetarian', 'vegan', 'any'],
+    urgencyLevels: ['NORMAL', 'URGENT', 'CRITICAL', 'EXPIRED'],
+    defaultSafetyBufferMinutes: Number(process.env.SAFETY_BUFFER_MINUTES_DEFAULT || 60),
+  });
+});
+
 // Authentication and session routes (/api/v1/auth)
 router.use('/auth', authRoutes);
 
