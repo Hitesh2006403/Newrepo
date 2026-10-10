@@ -20,10 +20,7 @@ const connectDB = async (uri = process.env.MONGODB_URI, options = {}) => {
       ...options,
     });
 
-    // Safe sanitized logging: prints host and database name ONLY, never credentials
-    const host = conn.connection.host;
-    const dbName = conn.connection.name;
-    console.log(`[Database] MongoDB connected successfully to host "${host}", db "${dbName}"`);
+    console.log('MongoDB connected successfully');
 
     return conn;
   } catch (error) {
