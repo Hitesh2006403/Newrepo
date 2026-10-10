@@ -66,10 +66,15 @@ export const api = {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ email, password }),
       });
-      if (!res.ok) throw new Error('Invalid credentials');
-      return await res.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Invalid credentials');
+      if (data.user) {
+        localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(data.user));
+      }
+      return data;
     }
 
     await delay(150);
@@ -84,15 +89,73 @@ export const api = {
     return { token: 'mock-jwt-token-' + user.id, user };
   },
 
+  // Genuine Google OAuth 2.0 Credential Verification on Backend
+  loginWithGoogle: async (credential, role = 'donor', portalVerificationData = {}) => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ credential, role, portalVerificationData }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Google authentication rejected by server.');
+      }
+      if (data.user) {
+        localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(data.user));
+      }
+      return data;
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  getMe: async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data.user) {
+        localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(data.user));
+        return data.user;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
+  logoutSession: async () => {
+    try {
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // ignore
+    }
+    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+  },
+
   register: async (userData) => {
     if (!USE_MOCK) {
       const res = await fetch(`${API_BASE}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(userData),
       });
-      if (!res.ok) throw new Error('Registration failed');
-      return await res.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Registration failed');
+      if (data.user) {
+        localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(data.user));
+      }
+      return data;
     }
 
     await delay();

@@ -5,6 +5,8 @@
   "description": "Share A Plate - Food Rescue Coordination Platform (MERN)",
   "scripts": {
     "dev": "npm run dev --prefix client",
+    "server": "node server/server.js",
+    "server:dev": "node --watch server/server.js",
     "build": "npm run build --prefix client",
     "client": "npm run dev --prefix client"
   }

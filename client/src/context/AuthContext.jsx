@@ -8,9 +8,22 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const user = api.getCurrentUser();
-    setCurrentUser(user);
-    setLoading(false);
+    const initAuth = async () => {
+      try {
+        const serverUser = await api.getMe();
+        if (serverUser) {
+          setCurrentUser(serverUser);
+          setLoading(false);
+          return;
+        }
+      } catch {
+        // Fall back to local storage
+      }
+      const user = api.getCurrentUser();
+      setCurrentUser(user);
+      setLoading(false);
+    };
+    initAuth();
   }, []);
 
   const login = async (email, password, extraData = {}) => {
@@ -24,47 +37,11 @@ export const AuthProvider = ({ children }) => {
     return updatedUser;
   };
 
-  const loginWithGoogle = async (targetRole = 'donor', googleProfile = null) => {
-    const profile = googleProfile || {
-      name: 'Hitesh Sharma',
-      email: 'hiteshav2006@gmail.com',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-    };
-
-    const allUsers = api.getAllUsers();
-    let user = allUsers.find((u) => u.role === targetRole);
-    if (user) {
-      user = {
-        ...user,
-        name: profile.name,
-        email: profile.email,
-        authProvider: 'google',
-        googleVerified: true,
-        avatar: profile.avatar,
-      };
-    } else {
-      user = {
-        id: `user-google-${targetRole}-${Date.now()}`,
-        name: profile.name,
-        email: profile.email,
-        role: targetRole,
-        organizationName:
-          targetRole === 'donor'
-            ? 'Grand Hyatt Food Hub'
-            : targetRole === 'recipient'
-            ? 'Grace Hope Children Shelter'
-            : targetRole === 'delivery'
-            ? 'Rapid Thermal Fleet'
-            : 'Central Command Operations',
-        verified: true,
-        authProvider: 'google',
-        googleVerified: true,
-        avatar: profile.avatar,
-      };
-    }
-    localStorage.setItem('sap_current_user_v1', JSON.stringify(user));
-    setCurrentUser(user);
-    return user;
+  // Genuine Google OAuth 2.0 Login via server-side token validation
+  const loginWithGoogle = async (credential, targetRole = 'donor', portalVerificationData = {}) => {
+    const res = await api.loginWithGoogle(credential, targetRole, portalVerificationData);
+    setCurrentUser(res.user);
+    return res.user;
   };
 
   const register = async (userData) => {
@@ -73,9 +50,9 @@ export const AuthProvider = ({ children }) => {
     return res.user;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await api.logoutSession();
     localStorage.removeItem('sap_current_user_v1');
-    // Switch to first donor or null
     const allUsers = api.getAllUsers();
     setCurrentUser(allUsers[0]);
   };

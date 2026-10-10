@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import {
@@ -20,8 +20,7 @@ import {
   FileBadge2,
   Truck,
   KeyRound,
-  X,
-  UserCheck,
+  Info,
 } from 'lucide-react';
 
 // Official 4-color Google G SVG logo
@@ -58,6 +57,7 @@ const ROLES = [
     ambientColor: 'bg-amber-500/20',
     textColor: 'text-amber-400',
     accentBorder: 'border-amber-500/30',
+    allowsGoogleAuth: true,
     customField: {
       name: 'fssaiNumber',
       label: 'FSSAI License / Kitchen Outlet ID',
@@ -83,6 +83,7 @@ const ROLES = [
     ambientColor: 'bg-emerald-500/20',
     textColor: 'text-emerald-400',
     accentBorder: 'border-emerald-500/30',
+    allowsGoogleAuth: true,
     customField: {
       name: 'ngoRegId',
       label: 'NGO Darpan ID / Trust Registration Code',
@@ -108,6 +109,7 @@ const ROLES = [
     ambientColor: 'bg-blue-500/20',
     textColor: 'text-blue-400',
     accentBorder: 'border-blue-500/30',
+    allowsGoogleAuth: true,
     customField: {
       name: 'vehicleNumber',
       label: 'Vehicle Plate No. / Thermal Carrier ID',
@@ -133,6 +135,7 @@ const ROLES = [
     ambientColor: 'bg-rose-500/20',
     textColor: 'text-rose-400',
     accentBorder: 'border-rose-500/30',
+    allowsGoogleAuth: false, // Platform Admin requires secure administrator authentication and clearance key
     customField: {
       name: 'adminClearanceKey',
       label: 'Admin Clearance Key / 2FA Passcode',
@@ -168,6 +171,7 @@ export const LoginPage = ({ onLoginSuccess, onContinueAsGuest }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [googleAuthLoading, setGoogleAuthLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
   // Registration inputs
@@ -178,12 +182,46 @@ export const LoginPage = ({ onLoginSuccess, onContinueAsGuest }) => {
   const [regPhone, setRegPhone] = useState('');
   const [regCustomField, setRegCustomField] = useState('');
 
-  // Google OAuth Simulation Modal state
-  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
-  const [googleTargetRole, setGoogleTargetRole] = useState(null);
+  // Ref for rendering native Google Identity Services button
+  const googleBtnContainerRef = useRef(null);
 
   // Current active role configuration
   const activeRole = ROLES.find((r) => r.role === selectedRole);
+
+  // Initialize official Google Identity Services SDK when entering an individual portal that supports Google
+  useEffect(() => {
+    if (
+      selectedRole &&
+      activeRole?.allowsGoogleAuth &&
+      formMode === 'login' &&
+      typeof window !== 'undefined'
+    ) {
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+      if (window.google?.accounts?.id && clientId && !clientId.includes('your-google-client-id')) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: handleGoogleCredentialResponse,
+            auto_select: false,
+            cancel_on_tap_outside: true,
+          });
+
+          if (googleBtnContainerRef.current) {
+            window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
+              theme: 'filled_black',
+              size: 'large',
+              shape: 'pill',
+              text: 'continue_with',
+              width: '100%',
+            });
+          }
+        } catch (e) {
+          console.warn('Google Identity Services initialization notice:', e);
+        }
+      }
+    }
+  }, [selectedRole, formMode]);
 
   // Handle clicking a role logo option
   const handleSelectRole = (roleKey) => {
@@ -285,31 +323,90 @@ export const LoginPage = ({ onLoginSuccess, onContinueAsGuest }) => {
     }
   };
 
-  // Google OAuth trigger
-  const handleOpenGoogleAuth = (targetRoleKey = null) => {
-    setGoogleTargetRole(targetRoleKey || selectedRole || 'donor');
-    setIsGoogleModalOpen(true);
-  };
+  // Real Google Identity Services (GIS) Callback - handles genuine Google ID token
+  const handleGoogleCredentialResponse = async (response) => {
+    if (!response?.credential) {
+      addToast('Google authentication failed: no credential received.', 'error');
+      return;
+    }
 
-  // Confirm Google login
-  const handleExecuteGoogleLogin = async (userAccount) => {
     try {
-      setSubmitting(true);
-      const target = googleTargetRole || selectedRole || 'donor';
-      const roleObj = ROLES.find((r) => r.role === target);
-
-      await loginWithGoogle(target, userAccount);
-      setIsGoogleModalOpen(false);
+      setGoogleAuthLoading(true);
+      await loginWithGoogle(response.credential, activeRole.role, {
+        [activeRole.customField.name]: roleCustomField.trim(),
+      });
 
       addToast(
-        `Google Authentication verified! Welcome ${userAccount.name} (${roleObj?.title || 'Partner'}).`,
+        `Google identity verified! Signed in to ${activeRole.title}.`,
         'success'
       );
       if (onLoginSuccess) onLoginSuccess();
     } catch (err) {
-      addToast(err.message || 'Google authentication failed', 'error');
+      addToast(err.message || 'Google token validation failed on server.', 'error');
     } finally {
-      setSubmitting(false);
+      setGoogleAuthLoading(false);
+    }
+  };
+
+  // Trigger Google Identity Services genuine OAuth 2.0 flow
+  const handleTriggerGoogleOAuth = () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+    if (!clientId || clientId.includes('your-google-client-id')) {
+      addToast(
+        'Google OAuth requires VITE_GOOGLE_CLIENT_ID in client/.env. Configure your Google Cloud Console Web Client ID.',
+        'warning'
+      );
+      return;
+    }
+
+    if (!window.google?.accounts?.id) {
+      addToast(
+        'Google Identity Services is initializing. Please verify network access to accounts.google.com.',
+        'info'
+      );
+      return;
+    }
+
+    try {
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleCredentialResponse,
+        cancel_on_tap_outside: true,
+      });
+
+      // Prompt the genuine Google Account Chooser
+      window.google.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          // If One-Tap is suppressed, use standard OAuth token client popup
+          if (window.google?.accounts?.oauth2) {
+            const tokenClient = window.google.accounts.oauth2.initTokenClient({
+              client_id: clientId,
+              scope: 'openid email profile',
+              callback: async (tokenResponse) => {
+                if (tokenResponse?.access_token) {
+                  // Fallback to token validation
+                  try {
+                    setGoogleAuthLoading(true);
+                    await loginWithGoogle(tokenResponse.access_token, activeRole.role, {
+                      [activeRole.customField.name]: roleCustomField.trim(),
+                    });
+                    addToast(`Signed in via Google OAuth as ${activeRole.title}.`, 'success');
+                    if (onLoginSuccess) onLoginSuccess();
+                  } catch (err) {
+                    addToast(err.message, 'error');
+                  } finally {
+                    setGoogleAuthLoading(false);
+                  }
+                }
+              },
+            });
+            tokenClient.requestAccessToken();
+          }
+        }
+      });
+    } catch (err) {
+      addToast(err.message || 'Failed to open Google sign-in dialog.', 'error');
     }
   };
 
@@ -355,9 +452,9 @@ export const LoginPage = ({ onLoginSuccess, onContinueAsGuest }) => {
         </div>
 
         {/* =========================================================================
-            STATE 1: SIMPLE LOGO OPTIONS SELECTOR
-            "only the option like receipant , food donor, etc with just a logo option,
-            it should be simple"
+            STATE 1: CLEAN SELECT YOUR PORTAL PAGE
+            Contains ONLY the ShareAPlate branding, heading, 4 role cards,
+            and Explore as Guest. Entire bottom Google section completely removed.
            ========================================================================= */}
         {!selectedRole && (
           <div className="space-y-10 animate-fadeIn max-w-4xl mx-auto">
@@ -411,38 +508,13 @@ export const LoginPage = ({ onLoginSuccess, onContinueAsGuest }) => {
                 );
               })}
             </div>
-
-            {/* Quick Google Single Sign-On Bar */}
-            <div className="max-w-md mx-auto text-center pt-4">
-              <div className="relative my-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/10" />
-                </div>
-                <div className="relative flex justify-center text-[11px] uppercase">
-                  <span className="bg-slate-950 px-4 text-zinc-400 font-bold tracking-widest">
-                    Or Continue With Google
-                  </span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleOpenGoogleAuth('donor')}
-                className="w-full bg-white hover:bg-zinc-100 text-zinc-900 font-extrabold py-3.5 px-5 rounded-2xl shadow-xl transition flex items-center justify-center gap-3 active:scale-[0.99] border border-zinc-200 group"
-              >
-                <GoogleIcon className="w-5 h-5" />
-                <span className="text-sm">Continue with Google (SSO)</span>
-              </button>
-              <p className="text-[11px] text-zinc-400 mt-2">
-                Fast verified authentication for all 4 member roles.
-              </p>
-            </div>
           </div>
         )}
 
         {/* =========================================================================
-            STATE 2: THE PREMIUM LOGIN PAGE (Appears on clicking a role logo)
-            "when we click on that the login page should appear with premium look and effects"
+            STATE 2: THE PREMIUM INDIVIDUAL LOGIN PAGE (Appears on clicking a role logo)
+            Google OAuth appears ONLY on permitted individual portals (Donor, Recipient, Delivery)
+            Platform Admin uses dedicated Administrator Authentication & Clearance Key
            ========================================================================= */}
         {selectedRole && activeRole && (
           <div className="max-w-md sm:max-w-lg mx-auto animate-scaleUp">
@@ -490,7 +562,9 @@ export const LoginPage = ({ onLoginSuccess, onContinueAsGuest }) => {
                   </h2>
                   <p className="text-xs text-zinc-400 font-medium mt-0.5">
                     {formMode === 'login'
-                      ? 'Enter your credentials or continue with Google'
+                      ? activeRole.allowsGoogleAuth
+                        ? 'Enter your credentials or continue with Google'
+                        : 'Restricted administrative command authentication'
                       : 'Join the verified food rescue network'}
                   </p>
                 </div>
@@ -528,16 +602,25 @@ export const LoginPage = ({ onLoginSuccess, onContinueAsGuest }) => {
                 </button>
               </div>
 
-              {/* GOOGLE SSO BUTTON */}
-              {formMode === 'login' && (
+              {/* GENUINE GOOGLE OAUTH SECTION (ONLY for portals where permitted: Donor, Recipient, Delivery) */}
+              {formMode === 'login' && activeRole.allowsGoogleAuth && (
                 <div className="space-y-4">
+                  {/* Container for rendered Google Identity Services button */}
+                  <div ref={googleBtnContainerRef} className="w-full min-h-[44px] flex justify-center" />
+
+                  {/* Accessible Fallback / Custom Button trigger */}
                   <button
                     type="button"
-                    onClick={() => handleOpenGoogleAuth(activeRole.role)}
-                    className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-zinc-100 text-slate-900 font-extrabold text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-3 active:scale-[0.99] group border border-white/20"
+                    onClick={handleTriggerGoogleOAuth}
+                    disabled={googleAuthLoading}
+                    className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-zinc-100 text-slate-900 font-extrabold text-xs sm:text-sm shadow-md transition flex items-center justify-center gap-3 active:scale-[0.99] group border border-white/20 cursor-pointer"
                   >
                     <GoogleIcon className="w-5 h-5 shrink-0" />
-                    <span>Continue with Google as {activeRole.shortLabel}</span>
+                    <span>
+                      {googleAuthLoading
+                        ? 'Validating Google Identity...'
+                        : `Continue with Google as ${activeRole.shortLabel}`}
+                    </span>
                   </button>
 
                   <div className="relative">
@@ -546,10 +629,20 @@ export const LoginPage = ({ onLoginSuccess, onContinueAsGuest }) => {
                     </div>
                     <div className="relative flex justify-center text-[10px] uppercase">
                       <span className="bg-zinc-900 px-3 text-zinc-400 font-bold tracking-wider">
-                        Or with credentials
+                        Or enter organizational credentials
                       </span>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Notice for Platform Admin (No public Google sign-in bypass) */}
+              {formMode === 'login' && !activeRole.allowsGoogleAuth && (
+                <div className="flex items-center gap-2.5 p-3 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300">
+                  <Info className="w-4 h-4 shrink-0 text-rose-400" />
+                  <span>
+                    Platform Admin requires pre-authorized credentials and a cryptographic clearance key. Public Google SSO is restricted.
+                  </span>
                 </div>
               )}
 
@@ -855,109 +948,6 @@ export const LoginPage = ({ onLoginSuccess, onContinueAsGuest }) => {
           </div>
         )}
       </div>
-
-      {/* =========================================================================
-          GOOGLE AUTHENTICATION MODAL
-         ========================================================================= */}
-      {isGoogleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fadeIn">
-          <div className="bg-zinc-900 text-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-white/15 space-y-5 animate-scaleUp">
-            {/* Google Header */}
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2.5">
-                <GoogleIcon className="w-6 h-6" />
-                <span className="text-base font-bold text-white">
-                  Sign in with Google
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsGoogleModalOpen(false)}
-                className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Prompt */}
-            <div className="space-y-1">
-              <h3 className="text-base font-bold text-white">
-                Choose an account
-              </h3>
-              <p className="text-xs text-zinc-400">
-                to continue to <strong className="text-rose-400">Share A Plate</strong> ({ROLES.find((r) => r.role === googleTargetRole)?.title || 'Portal'})
-              </p>
-            </div>
-
-            {/* Accounts */}
-            <div className="space-y-2.5">
-              <button
-                type="button"
-                onClick={() =>
-                  handleExecuteGoogleLogin({
-                    name: 'Hitesh Sharma',
-                    email: 'hiteshav2006@gmail.com',
-                    avatar:
-                      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-                  })
-                }
-                className="w-full flex items-center gap-3.5 p-3.5 rounded-2xl border border-white/10 hover:border-white/30 bg-white/5 hover:bg-white/10 transition text-left group cursor-pointer"
-              >
-                <img
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
-                  alt="Hitesh Sharma"
-                  className="w-10 h-10 rounded-full object-cover ring-2 ring-rose-500/50"
-                />
-                <div className="flex-1 truncate">
-                  <div className="text-sm font-bold text-white group-hover:text-amber-300 flex items-center gap-1.5">
-                    <span>Hitesh Sharma</span>
-                    <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.2 rounded font-semibold border border-emerald-500/30">
-                      Verified
-                    </span>
-                  </div>
-                  <div className="text-xs text-zinc-400 truncate">
-                    hiteshav2006@gmail.com
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-amber-300 group-hover:translate-x-1 transition-transform" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  handleExecuteGoogleLogin({
-                    name: 'Chef Marco Rossi (Google Culinary)',
-                    email: 'marco.rossi@hyatt-culinary.com',
-                    avatar:
-                      'https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=200&q=80',
-                  })
-                }
-                className="w-full flex items-center gap-3.5 p-3.5 rounded-2xl border border-white/10 hover:border-white/30 bg-white/5 hover:bg-white/10 transition text-left group cursor-pointer"
-              >
-                <img
-                  src="https://images.unsplash.com/photo-1583394838336-acd977736f90?auto=format&fit=crop&w=200&q=80"
-                  alt="Corporate Account"
-                  className="w-10 h-10 rounded-full object-cover ring-2 ring-zinc-600"
-                />
-                <div className="flex-1 truncate">
-                  <div className="text-sm font-bold text-white group-hover:text-amber-300">
-                    Grand Hyatt Executive Culinary
-                  </div>
-                  <div className="text-xs text-zinc-400 truncate">
-                    marco.rossi@hyatt-culinary.com
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-amber-300 group-hover:translate-x-1 transition-transform" />
-              </button>
-            </div>
-
-            {/* Privacy note */}
-            <div className="text-[11px] text-zinc-400 pt-2 border-t border-white/10 leading-relaxed">
-              Google will verify your identity with Share A Plate. Protected by Google Identity Services & OAuth 2.0.
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
