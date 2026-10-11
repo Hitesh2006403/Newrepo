@@ -1,5 +1,11 @@
 const mongoose = require('mongoose');
 const { REQUIREMENT_STATUS } = require('../constants/status');
+const {
+  PRIORITY,
+  PRIORITY_WEIGHTS,
+  DEFAULT_PRIORITY,
+  mapUrgencyToPriority,
+} = require('../constants/priority');
 
 const RecipientRequirementSchema = new mongoose.Schema(
   {
@@ -46,6 +52,21 @@ const RecipientRequirementSchema = new mongoose.Schema(
       type: Date,
       required: [true, 'Needed by deadline is required'],
     },
+    priority: {
+      type: String,
+      enum: {
+        values: Object.values(PRIORITY),
+        message: 'Invalid priority level',
+      },
+      default: DEFAULT_PRIORITY,
+      index: true,
+    },
+    priorityWeight: {
+      type: Number,
+      enum: [1, 2, 3],
+      default: 2,
+      index: true,
+    },
     urgency: {
       type: String,
       enum: {
@@ -77,6 +98,17 @@ const RecipientRequirementSchema = new mongoose.Schema(
         trim: true,
       },
     },
+    quantityFulfilled: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    receivedDonationIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Donation',
+      },
+    ],
     status: {
       type: String,
       enum: {
@@ -86,14 +118,55 @@ const RecipientRequirementSchema = new mongoose.Schema(
       default: REQUIREMENT_STATUS.OPEN,
       required: true,
     },
+    approxLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number], // [roundedLongitude, roundedLatitude]
+        default: [0, 0],
+      },
+    },
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 
+const { computeApproxLocation } = require('../utils/geoUtils');
+
+// Synchronize priority, priorityWeight, legacy urgency alias, and approxLocation
+RecipientRequirementSchema.pre('validate', function () {
+  if (this.priority) {
+    this.priorityWeight = PRIORITY_WEIGHTS[this.priority] || 2;
+    this.urgency = this.priority;
+  } else if (this.urgency) {
+    this.priority = mapUrgencyToPriority(this.urgency);
+    this.priorityWeight = PRIORITY_WEIGHTS[this.priority] || 2;
+    this.urgency = this.priority;
+  } else {
+    this.priority = DEFAULT_PRIORITY;
+    this.priorityWeight = 2;
+    this.urgency = DEFAULT_PRIORITY;
+  }
+
+  if (this.location && this.location.coordinates) {
+    const approx = computeApproxLocation(this.location);
+    if (approx) {
+      this.approxLocation = approx;
+    }
+  }
+});
+
 RecipientRequirementSchema.index({ location: '2dsphere' });
+RecipientRequirementSchema.index({ approxLocation: '2dsphere' });
 RecipientRequirementSchema.index({ status: 1, neededBy: 1 });
+RecipientRequirementSchema.index({ priorityWeight: -1, neededBy: 1 });
+RecipientRequirementSchema.index({ status: 1, priorityWeight: -1, neededBy: 1 });
 
 const RecipientRequirement = mongoose.model(
   'RecipientRequirement',

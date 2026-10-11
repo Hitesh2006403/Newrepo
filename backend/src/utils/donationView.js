@@ -62,6 +62,8 @@ const toDonationView = (donationDoc, viewer = null, viewerLocationOrDistance = n
   const { secondsToEffectiveExpiry, urgencyLevel } = computeCountdown(donation);
   donation.secondsToEffectiveExpiry = secondsToEffectiveExpiry;
   donation.urgencyLevel = urgencyLevel;
+  donation.priority = donation.priority || 'MEDIUM';
+  donation.priorityWeight = donation.priorityWeight || 2;
 
   // Compute distanceKm based on viewer location and privacy clearance
   if (viewerLocationOrDistance !== null && viewerLocationOrDistance !== undefined) {
@@ -92,15 +94,24 @@ const toDonationView = (donationDoc, viewer = null, viewerLocationOrDistance = n
   // Handle donor field population safely
   if (donation.donorId && typeof donation.donorId === 'object' && donation.donorId.name) {
     const donorObj = donation.donorId;
+    const isIndividual = !donorObj.organization || !donorObj.organization.name;
+    const displayName = canViewFullPII
+      ? donorObj.name
+      : isIndividual
+      ? donorObj.name.split(' ')[0]
+      : donorObj.organization?.name || donorObj.name;
+
     donation.donor = {
       _id: donorObj._id,
-      name: donorObj.name,
+      name: displayName,
       ratingAverage: donorObj.ratingAverage || 0,
       ratingCount: donorObj.ratingCount || 0,
       phone: canViewFullPII ? donorObj.phone : null,
     };
+    donation.donorName = displayName;
     donation.donorPhone = canViewFullPII ? donorObj.phone : null;
     if (!canViewFullPII) {
+      donation.donorId.name = displayName;
       donation.donorId.phone = null;
     }
   } else {
@@ -151,10 +162,34 @@ const toDonationView = (donationDoc, viewer = null, viewerLocationOrDistance = n
 
     if (donation.location && Array.isArray(donation.location.coordinates)) {
       const [lng, lat] = donation.location.coordinates;
+      const rounded = [Number(lng.toFixed(2)), Number(lat.toFixed(2))];
       donation.location = {
         type: 'Point',
-        coordinates: [Number(lng.toFixed(2)), Number(lat.toFixed(2))],
+        coordinates: rounded,
       };
+      donation.approxLocation = donation.approxLocation || {
+        type: 'Point',
+        coordinates: rounded,
+      };
+    }
+  } else if (!donation.approxLocation && donation.location?.coordinates) {
+    const [lng, lat] = donation.location.coordinates;
+    donation.approxLocation = {
+      type: 'Point',
+      coordinates: [Number(lng.toFixed(2)), Number(lat.toFixed(2))],
+    };
+  }
+
+  // Sanitize offers to prevent candidate leakage across recipients
+  if (Array.isArray(donation.offers)) {
+    if (isOwner || isAdmin) {
+      // Owner and admin see full candidate offers
+    } else if (viewerId) {
+      donation.offers = donation.offers.filter(
+        (o) => (o.recipientId?._id?.toString() || o.recipientId?.toString()) === viewerId
+      );
+    } else {
+      donation.offers = [];
     }
   }
 

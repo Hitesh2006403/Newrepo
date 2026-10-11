@@ -53,6 +53,38 @@ const protect = async (req, res, next) => {
   }
 };
 
+/**
+ * Optional authentication: loads req.user if a valid Bearer token is present,
+ * but allows unauthenticated callers through with req.user = null.
+ */
+const optionalAuth = async (req, res, next) => {
+  try {
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+    if (!token) {
+      req.user = null;
+      return next();
+    }
+
+    try {
+      const decoded = authService.verifyToken(token);
+      if (decoded && decoded.id) {
+        const user = await User.findById(decoded.id).select('+isActive');
+        if (user && user.isActive) {
+          req.user = user;
+        }
+      }
+    } catch {}
+
+    next();
+  } catch {
+    next();
+  }
+};
+
 module.exports = {
   protect,
+  optionalAuth,
 };

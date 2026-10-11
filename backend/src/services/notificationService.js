@@ -124,7 +124,76 @@ const createUrgencyNotifications = async (overrideThreshold) => {
   return createdCount;
 };
 
+/**
+ * When a HIGH priority donation is created, create in-app notifications for verified recipients
+ * who have an OPEN requirement with the same foodType and priority HIGH.
+ * Deduplicated, max 20 recipients per donation, strictly NO exact street address or phone in text.
+ *
+ * @param {Object} donation - The created donation document
+ * @returns {Promise<number>} Number of notifications generated
+ */
+const notifyHighPriorityMatch = async (donation) => {
+  if (!donation || donation.priority !== 'HIGH') {
+    return 0;
+  }
+
+  const RecipientRequirement = require('../models/RecipientRequirement');
+  const { REQUIREMENT_STATUS } = require('../constants/status');
+
+  // Find OPEN requirements matching foodType and HIGH priority
+  const matchingReqs = await RecipientRequirement.find({
+    status: REQUIREMENT_STATUS.OPEN,
+    foodType: donation.foodType,
+    priority: 'HIGH',
+  })
+    .sort({ neededBy: 1 })
+    .populate('recipientId', 'isVerified');
+
+  const targetRecipientIds = new Set();
+  for (const req of matchingReqs) {
+    if (req.recipientId && req.recipientId.isVerified) {
+      targetRecipientIds.add(req.recipientId._id.toString());
+      if (targetRecipientIds.size >= 20) break;
+    }
+  }
+
+  if (targetRecipientIds.size === 0) return 0;
+
+  const safeArea = donation.areaLabel || (donation.address && donation.address.city) || 'Your local area';
+  const notifTitle = 'High Priority Food Available';
+  const notifMessage = `A high-priority donation of ${donation.foodName} (${donation.remainingQuantity || donation.totalQuantity} ${donation.unit}) in ${safeArea} matches your requirement.`;
+
+  let createdCount = 0;
+  for (const recId of targetRecipientIds) {
+    const existing = await Notification.findOne({
+      userId: recId,
+      donationId: donation._id,
+      type: NOTIFICATION_TYPES.HIGH_PRIORITY_MATCH,
+    });
+
+    if (!existing) {
+      await createNotification(
+        recId,
+        NOTIFICATION_TYPES.HIGH_PRIORITY_MATCH,
+        notifTitle,
+        notifMessage,
+        donation._id
+      );
+      createdCount++;
+    }
+  }
+
+  return createdCount;
+};
+
+const sendNotification = async ({ userId, type, title, message, metadata = {} } = {}) => {
+  return createNotification(userId, type, title, message, metadata.donationId);
+};
+
 module.exports = {
   createNotification,
+  sendNotification,
   createUrgencyNotifications,
+  notifyHighPriorityMatch,
 };
+

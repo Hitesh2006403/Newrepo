@@ -1,6 +1,11 @@
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const { DONATION_STATUS } = require('../constants/status');
+const {
+  PRIORITY,
+  PRIORITY_WEIGHTS,
+  DEFAULT_PRIORITY,
+} = require('../constants/priority');
 const AcceptanceSchema = require('./Acceptance');
 
 const StatusHistorySchema = new mongoose.Schema(
@@ -210,8 +215,62 @@ const DonationSchema = new mongoose.Schema(
       default: DONATION_STATUS.AVAILABLE,
       required: true,
     },
+    priority: {
+      type: String,
+      enum: {
+        values: Object.values(PRIORITY),
+        message: 'Invalid priority level',
+      },
+      default: DEFAULT_PRIORITY,
+      index: true,
+    },
+    priorityWeight: {
+      type: Number,
+      enum: [1, 2, 3],
+      default: 2,
+      index: true,
+    },
     acceptances: [AcceptanceSchema],
     statusHistory: [StatusHistorySchema],
+    allotMode: {
+      type: String,
+      enum: ['MANUAL', 'AUTO'],
+      default: 'MANUAL',
+      index: true,
+    },
+    allotWave: {
+      type: Number,
+      default: 1,
+    },
+    offers: [
+      {
+        recipientId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+        requirementId: { type: mongoose.Schema.Types.ObjectId, ref: 'RecipientRequirement', default: null },
+        suggestedQuantity: { type: Number, required: true },
+        wave: { type: Number, default: 1 },
+        status: { type: String, enum: ['PENDING', 'ACCEPTED', 'DECLINED', 'EXPIRED'], default: 'PENDING' },
+        expiresAt: { type: Date, required: true },
+        declineReason: { type: String, default: null },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
+    rejectedByRecipients: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    approxLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number], // [roundedLongitude, roundedLatitude]
+        default: [0, 0],
+      },
+    },
   },
   {
     timestamps: true,
@@ -220,8 +279,19 @@ const DonationSchema = new mongoose.Schema(
   }
 );
 
-// Transform strings or loose objects to standard PhotoSchema shape before validation
+const { computeApproxLocation } = require('../utils/geoUtils');
+
+// Synchronize priorityWeight and approxLocation from priority and location
 DonationSchema.pre('validate', function () {
+  if (this.priority) {
+    this.priorityWeight = PRIORITY_WEIGHTS[this.priority] || 2;
+  }
+  if (this.location && this.location.coordinates) {
+    const approx = computeApproxLocation(this.location);
+    if (approx) {
+      this.approxLocation = approx;
+    }
+  }
   if (Array.isArray(this.photos)) {
     this.photos = this.photos.map((p) => {
       if (typeof p === 'string') {
@@ -241,7 +311,10 @@ DonationSchema.pre('validate', function () {
 
 // Indexes
 DonationSchema.index({ location: '2dsphere' });
+DonationSchema.index({ approxLocation: '2dsphere' });
 DonationSchema.index({ status: 1, expiryAt: 1 });
+DonationSchema.index({ priorityWeight: -1, expiryAt: 1 });
+DonationSchema.index({ status: 1, priorityWeight: -1, expiryAt: 1 });
 
 // Virtual: Effective Expiry Timestamp (expiryAt minus safety buffer in ms)
 DonationSchema.virtual('effectiveExpiryAt').get(function () {

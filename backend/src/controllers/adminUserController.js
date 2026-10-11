@@ -5,6 +5,12 @@ const ApiResponse = require('../utils/ApiResponse');
 const ApiError = require('../utils/ApiError');
 const ERROR_CODES = require('../constants/errorCodes');
 const asyncHandler = require('../utils/asyncHandler');
+const {
+  parsePriorityFilter,
+  parseSortParam,
+  getDonationSortObject,
+} = require('../utils/queryFilters');
+
 
 /**
  * List all users with pagination and optional filtering by role, isVerified, isActive.
@@ -104,6 +110,10 @@ const listAdminDonations = asyncHandler(async (req, res) => {
   if (req.query.foodType) {
     filter.foodType = req.query.foodType;
   }
+  const priorityFilter = parsePriorityFilter(req.query.priority);
+  if (priorityFilter) {
+    filter.priority = priorityFilter;
+  }
   if (req.query.dateFrom || req.query.dateTo) {
     filter.createdAt = {};
     if (req.query.dateFrom) {
@@ -122,14 +132,28 @@ const listAdminDonations = asyncHandler(async (req, res) => {
     }
   }
 
-  const [donations, total] = await Promise.all([
+  const sortKey = parseSortParam(req.query.sort, 'newest');
+  const sortObject = getDonationSortObject(sortKey);
+
+  const [donations, total, priorityAgg] = await Promise.all([
     Donation.find(filter)
-      .sort({ createdAt: -1 })
+      .sort(sortObject)
       .skip(skip)
       .limit(limit)
       .populate('donorId', 'name email phone ratingAverage ratingCount organization'),
     Donation.countDocuments(filter),
+    Donation.aggregate([
+      { $match: filter },
+      { $group: { _id: '$priority', count: { $sum: 1 } } },
+    ]),
   ]);
+
+  const countsPerPriority = { LOW: 0, MEDIUM: 0, HIGH: 0 };
+  priorityAgg.forEach((item) => {
+    if (item._id && countsPerPriority[item._id] !== undefined) {
+      countsPerPriority[item._id] = item.count;
+    }
+  });
 
   const totalPages = Math.ceil(total / limit) || 1;
 
@@ -151,6 +175,7 @@ const listAdminDonations = asyncHandler(async (req, res) => {
     limit,
     total,
     totalPages,
+    countsPerPriority,
   });
 });
 

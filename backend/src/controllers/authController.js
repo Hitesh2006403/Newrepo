@@ -214,10 +214,58 @@ const googleAuth = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * PATCH /api/v1/auth/me/map-visibility
+ * Toggles whether the user's organization/location appears on nearby maps for others.
+ */
+const updateMapVisibility = asyncHandler(async (req, res) => {
+  const { mapVisible } = req.body;
+  if (typeof mapVisible !== 'boolean') {
+    throw new ApiError(400, ERROR_CODES.VALIDATION_ERROR, 'mapVisible must be a boolean');
+  }
+
+  const updatedUser = await User.findByIdAndUpdate(
+    req.user._id,
+    { $set: { mapVisible } },
+    { new: true, runValidators: true }
+  );
+
+  return ApiResponse.send(res, 200, 'Map visibility preference updated successfully', {
+    mapVisible: updatedUser.mapVisible,
+  });
+});
+
+/**
+ * PATCH /api/v1/auth/me/agent-preferences
+ * Delivery agents set volunteerOnly and acceptsPaid preferences.
+ */
+const updateAgentPreferences = asyncHandler(async (req, res) => {
+  if (req.user.role !== ROLES.DELIVERY_AGENT && req.user.role !== ROLES.ADMIN) {
+    throw new ApiError(403, ERROR_CODES.FORBIDDEN, 'Only delivery agents can update agent preferences');
+  }
+
+  const { volunteerOnly, acceptsPaid } = req.body;
+  const updates = {};
+  if (typeof volunteerOnly === 'boolean') updates['agentPreferences.volunteerOnly'] = volunteerOnly;
+  if (typeof acceptsPaid === 'boolean') updates['agentPreferences.acceptsPaid'] = acceptsPaid;
+
+  const updatedUser = await User.findByIdAndUpdate(
+    req.user._id,
+    { $set: updates },
+    { new: true, runValidators: true }
+  );
+
+  return ApiResponse.send(res, 200, 'Agent preferences updated successfully', {
+    agentPreferences: updatedUser.agentPreferences,
+  });
+});
+
 module.exports = {
   register,
   login,
   googleAuth,
   logout,
   getMe,
+  updateMapVisibility,
+  updateAgentPreferences,
 };

@@ -59,9 +59,18 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-// 4. HTTP Request Logging (suppressed during automated tests)
+// 4. HTTP Request Logging (suppressed during automated tests, redacts coordinates and secrets)
+morgan.token('safe-url', (req) => {
+  const rawUrl = req.originalUrl || req.url || '';
+  return rawUrl.replace(
+    /([?&](?:lat|lng|latitude|longitude|fromLat|toLat|fromLng|toLng|phone|token)=)[^&]+/gi,
+    '$1[REDACTED]'
+  );
+});
+
 if (process.env.NODE_ENV !== 'test') {
-  app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+  const logFormat = ':method :safe-url :status :response-time ms - :res[content-length]';
+  app.use(morgan(logFormat));
 }
 
 // 5. Body Parsers with Payload Size Limits

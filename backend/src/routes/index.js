@@ -11,6 +11,11 @@ const reviewRoutes = require('./reviewRoutes');
 const deliveryRoutes = require('./deliveryRoutes');
 const recipientRoutes = require('./recipientRoutes');
 const porterRoutes = require('./porterRoutes');
+const geoRoutes = require('./geoRoutes');
+const mapRoutes = require('./mapRoutes');
+const { feesRouter, acceptancesRouter } = require('./feeRoutes');
+const matchingRoutes = require('./matchingRoutes');
+const batchRoutes = require('./batchRoutes');
 
 const router = express.Router();
 
@@ -38,6 +43,15 @@ const {
   ACCEPTANCE_STATUS,
   REQUIREMENT_STATUS,
 } = require('../constants/status');
+const {
+  PRIORITY,
+  PRIORITY_WEIGHTS,
+  PRIORITY_OPTIONS,
+} = require('../constants/priority');
+
+const { getFeatureFlags } = require('../constants/featureFlags');
+
+const { VEHICLE_TYPES, VEHICLE_CAPACITIES, BATCH_CONFIG } = require('../constants/batch');
 
 router.get('/meta', (req, res) => {
   return ApiResponse.send(res, 200, 'System metadata and enumerations retrieved', {
@@ -45,11 +59,21 @@ router.get('/meta', (req, res) => {
     donationStatuses: Object.values(DONATION_STATUS),
     acceptanceStatuses: Object.values(ACCEPTANCE_STATUS),
     requirementStatuses: Object.values(REQUIREMENT_STATUS),
+    priorities: PRIORITY_OPTIONS,
+    priorityWeights: PRIORITY_WEIGHTS,
+    defaultPriority: 'MEDIUM',
+    radiusPresets: [5, 7, 10],
+    defaultRadiusKm: 5,
+    maxRadiusKm: 10,
+    featureFlags: getFeatureFlags(),
     foodTypes: ['cooked_meals', 'raw_groceries', 'packaged_food', 'bakery_items'],
     units: ['plates', 'kg', 'packets', 'servings'],
     dietaryTypes: ['vegetarian', 'non_vegetarian', 'vegan', 'any'],
     urgencyLevels: ['NORMAL', 'URGENT', 'CRITICAL', 'EXPIRED'],
     defaultSafetyBufferMinutes: Number(process.env.SAFETY_BUFFER_MINUTES_DEFAULT || 60),
+    vehicleTypes: Object.values(VEHICLE_TYPES),
+    vehicleCapacities: VEHICLE_CAPACITIES,
+    batchConfig: BATCH_CONFIG,
   });
 });
 
@@ -85,6 +109,23 @@ router.use('/recipient', recipientRoutes);
 
 // Porter Enterprise Logistics Integration (/api/v1/porter)
 router.use('/porter', porterRoutes);
+
+// Geographic Services & Routing (/api/v1/geo)
+router.use('/geo', geoRoutes);
+
+// Proximity & Interactive Map Radar (/api/v1/map)
+router.use('/map', mapRoutes);
+
+// Delivery Fee Choice & Acceptance Protocols (/api/v1/fees & /api/v1/acceptances)
+router.use('/fees', feesRouter);
+router.use('/acceptances', acceptancesRouter);
+
+// Smart Matching, Auto-Allotment & Recommendations (/api/v1/matches)
+router.use('/matches', matchingRoutes);
+
+// Delivery Batching & Multi-Stop Co-Routing (/api/v1/delivery/batches & /api/v1/batches)
+router.use('/delivery/batches', batchRoutes);
+router.use('/batches', batchRoutes);
 
 // Test harness verification route (active strictly in test environment)
 if (process.env.NODE_ENV === 'test') {

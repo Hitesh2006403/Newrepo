@@ -13,6 +13,21 @@ const {
 } = require('../services/donationStateService');
 const { toDonationView } = require('../utils/donationView');
 const { storageService } = require('../services/storageService');
+const {
+  PRIORITY,
+  PRIORITY_WEIGHTS,
+} = require('../constants/priority');
+const {
+  parsePriorityFilter,
+  parseSortParam,
+  getDonationSortObject,
+} = require('../utils/queryFilters');
+const { notifyHighPriorityMatch } = require('../services/notificationService');
+const RecipientRequirement = require('../models/RecipientRequirement');
+const { REQUIREMENT_STATUS } = require('../constants/status');
+const { emitEvent, DOMAIN_EVENT_NAMES } = require('../services/domainEvents');
+const mongoose = require('mongoose');
+
 
 /**
  * POST /api/v1/donations
@@ -47,6 +62,13 @@ const createDonation = asyncHandler(async (req, res) => {
   await donation.save();
   await donation.populate('donorId', 'name ratingAverage ratingCount phone');
 
+  // Asynchronously dispatch notifications for high-priority matching requirements
+  if (donation.priority === PRIORITY.HIGH) {
+    notifyHighPriorityMatch(donation).catch((err) => {
+      console.error(`[Notification] High priority match dispatch error: ${err.message}`);
+    });
+  }
+
   return ApiResponse.send(
     res,
     201,
@@ -59,6 +81,7 @@ const createDonation = asyncHandler(async (req, res) => {
  * GET /api/v1/donations/my
  * Lists all donations posted by the authenticated donor.
  * Access: Donor only.
+ * Supports ?priority= and ?sort= query parameters.
  */
 const getMyDonations = asyncHandler(async (req, res) => {
   const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
@@ -70,9 +93,17 @@ const getMyDonations = asyncHandler(async (req, res) => {
     filter.status = req.query.status;
   }
 
+  const priorityFilter = parsePriorityFilter(req.query.priority);
+  if (priorityFilter) {
+    filter.priority = priorityFilter;
+  }
+
+  const sortKey = parseSortParam(req.query.sort, 'newest');
+  const sortObject = getDonationSortObject(sortKey);
+
   const [donations, total] = await Promise.all([
     Donation.find(filter)
-      .sort({ createdAt: -1 })
+      .sort(sortObject)
       .skip(skip)
       .limit(limit)
       .populate('donorId', 'name ratingAverage ratingCount phone'),
@@ -133,6 +164,12 @@ const getAvailableDonations = asyncHandler(async (req, res) => {
     filter.dietaryType = req.query.dietaryType;
   }
 
+  // Priority filtering (supports single or comma-separated list)
+  const priorityFilter = parsePriorityFilter(req.query.priority);
+  if (priorityFilter) {
+    filter.priority = priorityFilter;
+  }
+
   // Geospatial proximity filtering if coordinates are provided
   let userCoordinates = null;
   if (req.query.lat !== undefined || req.query.lng !== undefined) {
@@ -152,45 +189,60 @@ const getAvailableDonations = asyncHandler(async (req, res) => {
         'Latitude must be between -90 and 90, and longitude between -180 and 180'
       );
     }
-    let maxDistanceKm = 25;
-    if (req.query.maxDistanceKm !== undefined) {
-      const parsedDist = parseFloat(req.query.maxDistanceKm);
-      if (isNaN(parsedDist) || parsedDist <= 0 || parsedDist > 500) {
+    let radiusKm = 5;
+    const rawRadius = req.query.radiusKm !== undefined ? req.query.radiusKm : req.query.maxDistanceKm;
+    if (rawRadius !== undefined) {
+      const parsedDist = parseFloat(rawRadius);
+      if (isNaN(parsedDist) || parsedDist <= 0 || parsedDist > 10) {
         throw new ApiError(
           400,
           ERROR_CODES.VALIDATION_ERROR,
-          'maxDistanceKm must be a positive number up to 500'
+          'Radius must be a number between 0.1 and 10 km'
         );
       }
-      maxDistanceKm = parsedDist;
+      radiusKm = parsedDist;
     }
     userCoordinates = [lng, lat];
 
-    filter.location = {
+    // Non-privileged callers query approxLocation to preserve donor privacy and defeat trilateration
+    const isPrivileged = req.user && req.user.role === 'admin';
+    const locField = isPrivileged ? 'location' : 'approxLocation';
+
+    filter[locField] = {
       $nearSphere: {
         $geometry: {
           type: 'Point',
           coordinates: userCoordinates,
         },
-        $maxDistance: maxDistanceKm * 1000, // Convert km to meters
+        $maxDistance: radiusKm * 1000, // Convert km to meters
       },
     };
   }
 
   const countFilter = { ...filter };
-  if (countFilter.location && countFilter.location.$nearSphere) {
-    const coords = countFilter.location.$nearSphere.$geometry.coordinates;
-    const maxMeters = countFilter.location.$nearSphere.$maxDistance;
-    const rad = maxMeters / (6378.1 * 1000);
-    countFilter.location = {
-      $geoWithin: {
-        $centerSphere: [coords, rad],
-      },
-    };
+  for (const field of ['location', 'approxLocation']) {
+    if (countFilter[field] && countFilter[field].$nearSphere) {
+      const coords = countFilter[field].$nearSphere.$geometry.coordinates;
+      const maxMeters = countFilter[field].$nearSphere.$maxDistance;
+      const rad = maxMeters / (6378.1 * 1000);
+      countFilter[field] = {
+        $geoWithin: {
+          $centerSphere: [coords, rad],
+        },
+      };
+    }
+  }
+
+  const sortKey = parseSortParam(req.query.sort, 'default');
+  const sortObject = getDonationSortObject(sortKey, Boolean(userCoordinates));
+
+  let donationFindQuery = Donation.find(filter);
+  if (sortObject) {
+    donationFindQuery = donationFindQuery.sort(sortObject);
   }
 
   const [donations, total] = await Promise.all([
-    Donation.find(filter)
+    donationFindQuery
       .skip(skip)
       .limit(limit)
       .populate('donorId', 'name ratingAverage ratingCount phone'),
@@ -230,14 +282,23 @@ const listDonations = asyncHandler(async (req, res) => {
     filter.donorId = req.query.donorId;
   }
 
+  const priorityFilter = parsePriorityFilter(req.query.priority);
+  if (priorityFilter) {
+    filter.priority = priorityFilter;
+  }
+
+  const sortKey = parseSortParam(req.query.sort, 'newest');
+  const sortObject = getDonationSortObject(sortKey);
+
   const [donations, total] = await Promise.all([
     Donation.find(filter)
-      .sort({ createdAt: -1 })
+      .sort(sortObject)
       .skip(skip)
       .limit(limit)
       .populate('donorId', 'name ratingAverage ratingCount phone'),
     Donation.countDocuments(filter),
   ]);
+
 
   const totalPages = Math.ceil(total / limit) || 1;
   const viewData = donations.map((d) => toDonationView(d, req.user));
@@ -349,6 +410,11 @@ const updateDonation = asyncHandler(async (req, res) => {
   if (updates.instructions !== undefined) updateFields.instructions = updates.instructions;
   if (updates.pickupWindowEnd) updateFields.pickupWindowEnd = updates.pickupWindowEnd;
   if (updates.photos) updateFields.photos = updates.photos;
+  if (updates.priority) {
+    updateFields.priority = updates.priority;
+    updateFields.priorityWeight = PRIORITY_WEIGHTS[updates.priority] || 2;
+  }
+
 
   const atomicFilter = {
     _id: id,
@@ -679,11 +745,11 @@ const deleteDonationPhoto = asyncHandler(async (req, res) => {
  */
 const acceptDonation = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { quantityAccepted = 1, notes, pickupPreference, requirementId } = req.body;
+  const { quantityAccepted = 1, notes, pickupPreference, requirementId, deliveryFee } = req.body;
 
   const donation = await Donation.findById(id);
   if (!donation) {
-    throw new ApiError(404, ERROR_CODES.RESOURCE_NOT_FOUND, 'Donation not found');
+    throw new ApiError(404, ERROR_CODES.NOT_FOUND || 'NOT_FOUND', 'Donation not found');
   }
 
   const qty = Number(quantityAccepted);
@@ -699,6 +765,14 @@ const acceptDonation = asyncHandler(async (req, res) => {
   const newStatus = donation.remainingQuantity === 0 ? DONATION_STATUS.ACCEPTED : DONATION_STATUS.PARTIALLY_ACCEPTED;
   donation.status = newStatus;
 
+  const initialFee = {
+    payerMode: deliveryFee?.payerMode || 'NONE',
+    amount: deliveryFee?.payerMode === 'NONE' ? 0 : Math.min(500, Number(deliveryFee?.amount || 0)),
+    status: deliveryFee?.payerMode === 'NONE' ? 'AGREED' : 'PROPOSED',
+    feeVersion: 1,
+    proposedBy: req.user._id,
+  };
+
   const newAcceptance = {
     recipientId: req.user._id,
     requirementId: requirementId || null,
@@ -707,10 +781,24 @@ const acceptDonation = asyncHandler(async (req, res) => {
     pickupPreference: pickupPreference || 'delivery_agent_required',
     claimedAt: new Date(),
     notes: notes || null,
+    prioritySnapshot: donation.priority || 'MEDIUM',
+    deliveryFee: initialFee,
   };
 
   if (!donation.acceptances) donation.acceptances = [];
   donation.acceptances.push(newAcceptance);
+
+  // If there was an active pending offer for this recipient, mark it accepted
+  if (donation.offers && donation.offers.length > 0) {
+    const matchingOffer = donation.offers.find(
+      (o) =>
+        o.recipientId.toString() === req.user._id.toString() &&
+        o.status === 'PENDING'
+    );
+    if (matchingOffer) {
+      matchingOffer.status = 'ACCEPTED';
+    }
+  }
 
   donation.statusHistory.push({
     status: newStatus,
@@ -720,6 +808,38 @@ const acceptDonation = asyncHandler(async (req, res) => {
   });
 
   await donation.save();
+
+  // Atomically update linked recipient requirement if provided
+  if (requirementId && mongoose.Types.ObjectId.isValid(requirementId)) {
+    const reqDoc = await RecipientRequirement.findById(requirementId);
+    if (reqDoc) {
+      reqDoc.quantityFulfilled = (reqDoc.quantityFulfilled || 0) + qty;
+      if (!reqDoc.receivedDonationIds) reqDoc.receivedDonationIds = [];
+      if (!reqDoc.receivedDonationIds.some((id) => id.toString() === donation._id.toString())) {
+        reqDoc.receivedDonationIds.push(donation._id);
+      }
+      const targetReqQty = reqDoc.quantityNeeded || reqDoc.quantity || 0;
+      if (reqDoc.quantityFulfilled >= targetReqQty) {
+        reqDoc.status = REQUIREMENT_STATUS.FULFILLED;
+      } else {
+        reqDoc.status = REQUIREMENT_STATUS.PARTIALLY_FULFILLED;
+      }
+      await reqDoc.save();
+    }
+  }
+
+  // Decoupled domain events
+  emitEvent(DOMAIN_EVENT_NAMES.ACCEPTANCE_CREATED, {
+    donationId: donation._id,
+    acceptanceId: newAcceptance._id,
+    recipientId: req.user._id,
+    quantity: qty,
+  });
+  emitEvent(DOMAIN_EVENT_NAMES.DONATION_REMAINDER_CHANGED, {
+    donationId: donation._id,
+    remainingQuantity: donation.remainingQuantity,
+  });
+
   await donation.populate('donorId', 'name ratingAverage ratingCount phone');
 
   return ApiResponse.send(

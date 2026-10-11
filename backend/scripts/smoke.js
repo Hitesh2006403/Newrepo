@@ -572,8 +572,55 @@ async function main() {
       }
     });
 
+    // -------------------------------------------------------------------------
+    // Step 15: User-chosen Priority (LOW, MEDIUM, HIGH) Verification
+    // -------------------------------------------------------------------------
+    await runStep(15, 'User-chosen Priority verification across meta, filtering, numeric sort, and dashboard counts', async () => {
+      // 1. Verify GET /api/v1/meta exposes priorities, priorityWeights, and defaultPriority
+      const metaRes = await request(app).get('/api/v1/meta');
+      if (metaRes.status !== 200) {
+        throw new Error(`Expected 200 from /api/v1/meta, got ${metaRes.status}`);
+      }
+      if (!metaRes.body.data.priorities || !metaRes.body.data.priorityWeights) {
+        throw new Error('Meta endpoint missing priorities or priorityWeights');
+      }
+
+      // 2. Verify filter by priority on donations list
+      const filterRes = await request(app)
+        .get('/api/v1/donations?priority=HIGH,MEDIUM,LOW&sort=priority_desc')
+        .set('Authorization', `Bearer ${adminToken}`);
+      if (filterRes.status !== 200) {
+        throw new Error(`Expected 200 from priority filter list, got ${filterRes.status}`);
+      }
+
+      // 3. Verify invalid sort rejected with 400
+      const invalidSortRes = await request(app)
+        .get('/api/v1/donations?sort=unsupported_sort')
+        .set('Authorization', `Bearer ${adminToken}`);
+      if (invalidSortRes.status !== 400) {
+        throw new Error(`Expected 400 for invalid sort param, got ${invalidSortRes.status}`);
+      }
+
+      // 4. Verify recipient dashboard contains countsPerPriority
+      const recipientDashRes = await request(app)
+        .get('/api/v1/dashboard/recipient')
+        .set('Authorization', `Bearer ${verifiedRecipientToken}`);
+      if (recipientDashRes.status !== 200 || !recipientDashRes.body.data.countsPerPriority) {
+        throw new Error('Recipient dashboard missing countsPerPriority');
+      }
+
+      // 5. Verify admin donation feed contains countsPerPriority
+      const adminFeedRes = await request(app)
+        .get('/api/v1/admin/donations')
+        .set('Authorization', `Bearer ${adminToken}`);
+      const adminCounts = adminFeedRes.body.meta?.countsPerPriority || adminFeedRes.body.countsPerPriority;
+      if (adminFeedRes.status !== 200 || !adminCounts) {
+        throw new Error('Admin donation feed missing countsPerPriority in meta');
+      }
+    });
+
     console.log('\n======================================================');
-    console.log('  \x1b[32m✔ ALL 14 END-TO-END SMOKE TEST STEPS PASSED!\x1b[0m');
+    console.log('  \x1b[32m✔ ALL 15 END-TO-END SMOKE TEST STEPS PASSED!\x1b[0m');
     console.log('======================================================\n');
   } finally {
     await mongoose.disconnect();

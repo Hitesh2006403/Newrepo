@@ -714,6 +714,8 @@ describe('Security & Penetration Testing Suite (Attack-Style Verification)', () 
         'activeDonationsCount',
         'registeredDonorsCount',
         'registeredRecipientsCount',
+        'volunteerDeliveriesCount',
+        'paidDeliveriesCount',
       ]);
     });
   });

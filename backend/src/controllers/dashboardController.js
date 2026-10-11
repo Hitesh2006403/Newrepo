@@ -1,6 +1,7 @@
 const Donation = require('../models/Donation');
 const RecipientRequirement = require('../models/RecipientRequirement');
 const User = require('../models/User');
+const DeliveryTask = require('../models/DeliveryTask');
 const ApiResponse = require('../utils/ApiResponse');
 const asyncHandler = require('../utils/asyncHandler');
 const { DONATION_STATUS, REQUIREMENT_STATUS } = require('../constants/status');
@@ -154,10 +155,25 @@ const getPublicImpact = asyncHandler(async (req, res) => {
       ? Number(Math.max(0, matchTimeAgg[0].avgDiff).toFixed(1))
       : null;
 
-  // 5. Verified user counts
-  const [registeredDonors, registeredRecipients] = await Promise.all([
+  // 5. Verified user counts and delivery metrics
+  const [registeredDonors, registeredRecipients, volunteerDeliveriesCount, paidDeliveriesCount] = await Promise.all([
     User.countDocuments({ role: ROLES.DONOR }),
     User.countDocuments({ role: ROLES.RECIPIENT, isVerified: true }),
+    DeliveryTask.countDocuments({
+      $or: [
+        { isVolunteer: true },
+        { payerMode: 'NONE' },
+        { deliveryFee: 0 },
+        { deliveryFee: { $exists: false } },
+      ],
+    }),
+    DeliveryTask.countDocuments({
+      $and: [
+        { isVolunteer: false },
+        { payerMode: { $in: ['DONOR', 'RECIPIENT', 'SPLIT'] } },
+        { deliveryFee: { $gt: 0 } },
+      ],
+    }),
   ]);
 
   const responseData = {
@@ -169,6 +185,8 @@ const getPublicImpact = asyncHandler(async (req, res) => {
     activeDonationsCount,
     registeredDonorsCount: registeredDonors,
     registeredRecipientsCount: registeredRecipients,
+    volunteerDeliveriesCount,
+    paidDeliveriesCount,
   };
 
   if (process.env.NODE_ENV !== 'test') {
@@ -238,7 +256,19 @@ const getDonorDashboard = asyncHandler(async (req, res) => {
   const completionRate =
     totalDonations > 0 ? Number(((completedDonations / totalDonations) * 100).toFixed(1)) : 0;
 
-  // 4. Last 5 donations formatted with role-scoped view
+  // 4. Counts per priority
+  const priorityCountsAgg = await Donation.aggregate([
+    { $match: { donorId } },
+    { $group: { _id: '$priority', count: { $sum: 1 } } },
+  ]);
+  const countsPerPriority = { LOW: 0, MEDIUM: 0, HIGH: 0 };
+  priorityCountsAgg.forEach((item) => {
+    if (item._id && countsPerPriority[item._id] !== undefined) {
+      countsPerPriority[item._id] = item.count;
+    }
+  });
+
+  // 5. Last 5 donations formatted with role-scoped view
   const last5 = await Donation.find({ donorId })
     .sort({ createdAt: -1 })
     .limit(5)
@@ -247,6 +277,7 @@ const getDonorDashboard = asyncHandler(async (req, res) => {
 
   return ApiResponse.send(res, 200, 'Donor dashboard retrieved successfully', {
     countsPerStatus,
+    countsPerPriority,
     mealsContributed,
     completionRate,
     last5Donations,
@@ -352,8 +383,21 @@ const getRecipientDashboard = asyncHandler(async (req, res) => {
   allClaims.sort((a, b) => new Date(b.claimedAt) - new Date(a.claimedAt));
   const last5Acceptances = allClaims.slice(0, 5);
 
+  // 5. Counts per priority for recipient requirements
+  const priorityCountsAgg = await RecipientRequirement.aggregate([
+    { $match: { recipientId } },
+    { $group: { _id: '$priority', count: { $sum: 1 } } },
+  ]);
+  const countsPerPriority = { LOW: 0, MEDIUM: 0, HIGH: 0 };
+  priorityCountsAgg.forEach((item) => {
+    if (item._id && countsPerPriority[item._id] !== undefined) {
+      countsPerPriority[item._id] = item.count;
+    }
+  });
+
   return ApiResponse.send(res, 200, 'Recipient dashboard retrieved successfully', {
     countsPerStatus,
+    countsPerPriority,
     totalAcceptedQuantity,
     completedMeals,
     last5Acceptances,

@@ -32,5 +32,7 @@ router.post('/google', authLimiter, authController.googleAuth);
 // Protected authentication routes
 router.post('/logout', protect, authController.logout);
 router.get('/me', protect, authController.getMe);
+router.patch('/me/map-visibility', protect, authController.updateMapVisibility);
+router.patch('/me/agent-preferences', protect, authController.updateAgentPreferences);
 
 module.exports = router;

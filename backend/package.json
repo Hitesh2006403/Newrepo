@@ -9,7 +9,13 @@
     "dev": "nodemon server.js",
     "test": "jest --runInBand --detectOpenHandles",
     "smoke": "node scripts/smoke.js",
-    "seed:demo": "node scripts/seedDemo.js"
+    "seed": "node scripts/seed.js",
+    "seed:demo": "node scripts/seedDemo.js",
+    "migrate:priority": "node scripts/migratePriority.js",
+    "migrate:priority:dry": "node scripts/migratePriority.js --dry-run",
+    "migrate:geo": "node scripts/migrateApproxLocation.js",
+    "migrate:geo:dry": "node scripts/migrateApproxLocation.js --dry-run",
+    "migrate:all:dry": "npm run migrate:priority:dry && npm run migrate:geo:dry"
   },
   "dependencies": {
     "bcryptjs": "3.0.3",

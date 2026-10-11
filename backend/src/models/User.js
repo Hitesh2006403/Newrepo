@@ -92,14 +92,52 @@ const UserSchema = new mongoose.Schema(
     googleVerified: { type: Boolean, default: false },
     authProvider: { type: String, default: 'local' },
     avatar: { type: String, default: '' },
+    mapVisible: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+    agentPreferences: {
+      volunteerOnly: { type: Boolean, default: false },
+      acceptsPaid: { type: Boolean, default: true },
+      vehicleType: {
+        type: String,
+        enum: ['2_WHEELER', '3_WHEELER', '4_WHEELER', 'TRUCK'],
+        default: '2_WHEELER',
+      },
+    },
+    approxLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number], // [roundedLongitude, roundedLatitude]
+        default: [0, 0],
+      },
+    },
   },
   {
     timestamps: true,
   }
 );
 
-// Geospatial index on GeoJSON Point location
+const { computeApproxLocation } = require('../utils/geoUtils');
+
+// Geospatial indexes
 UserSchema.index({ location: '2dsphere' });
+UserSchema.index({ approxLocation: '2dsphere' });
+
+// Pre-validate hook: Sync approxLocation whenever location is updated
+UserSchema.pre('validate', function () {
+  if (this.location && this.location.coordinates) {
+    const approx = computeApproxLocation(this.location);
+    if (approx) {
+      this.approxLocation = approx;
+    }
+  }
+});
 
 // Pre-save hook: Hash password with bcryptjs whenever modified
 UserSchema.pre('save', async function () {

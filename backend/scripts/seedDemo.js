@@ -199,7 +199,7 @@ const runDemoSeed = async () => {
     const now = new Date();
 
     const donationDefinitions = [
-      // 1. URGENT (< 25 min to effective expiry): 50 Hot Sambar Rice Meals
+      // 1. URGENT (< 25 min to effective expiry): 50 Hot Sambar Rice Meals (HIGH priority matching HIGH requirement)
       {
         donorId: donorRestaurant._id,
         foodName: '50 Hot Sambar Rice & Poriyal Meals',
@@ -208,6 +208,7 @@ const runDemoSeed = async () => {
         totalQuantity: 50,
         remainingQuantity: 50,
         unit: 'plates',
+        priority: 'HIGH',
         cookedAt: new Date(now.getTime() - 2 * 3600000),
         expiryAt: new Date(now.getTime() + 85 * 60000), // 85m total -> effective (85 - 60) = 25m left
         safetyBufferMinutes: 60,
@@ -229,6 +230,7 @@ const runDemoSeed = async () => {
         totalQuantity: 30,
         remainingQuantity: 30,
         unit: 'packets',
+        priority: 'MEDIUM',
         cookedAt: new Date(now.getTime() - 90 * 60000),
         expiryAt: new Date(now.getTime() + 88 * 60000), // effective (88 - 60) = 28m left
         safetyBufferMinutes: 60,
@@ -250,6 +252,7 @@ const runDemoSeed = async () => {
         totalQuantity: 100,
         remainingQuantity: 100,
         unit: 'plates',
+        priority: 'LOW',
         cookedAt: new Date(now.getTime() - 60 * 60000),
         expiryAt: new Date(now.getTime() + 5 * 3600000), // effective (300 - 60) = 240m (4 hours) left
         safetyBufferMinutes: 60,
@@ -271,6 +274,7 @@ const runDemoSeed = async () => {
         totalQuantity: 40,
         remainingQuantity: 40,
         unit: 'kg',
+        priority: 'MEDIUM',
         cookedAt: new Date(now.getTime() - 12 * 3600000),
         expiryAt: new Date(now.getTime() + 25 * 3600000),
         safetyBufferMinutes: 60,
@@ -292,6 +296,7 @@ const runDemoSeed = async () => {
         totalQuantity: 80,
         remainingQuantity: 30, // 80 - 50 = 30 open
         unit: 'plates',
+        priority: 'HIGH',
         cookedAt: new Date(now.getTime() - 3 * 3600000),
         expiryAt: new Date(now.getTime() + 4 * 3600000),
         safetyBufferMinutes: 60,
@@ -322,6 +327,7 @@ const runDemoSeed = async () => {
         totalQuantity: 45,
         remainingQuantity: 0,
         unit: 'plates',
+        priority: 'MEDIUM',
         cookedAt: new Date(now.getTime() - 2.5 * 3600000),
         expiryAt: new Date(now.getTime() + 3.5 * 3600000),
         safetyBufferMinutes: 60,
@@ -353,6 +359,7 @@ const runDemoSeed = async () => {
         totalQuantity: 25,
         remainingQuantity: 25,
         unit: 'plates',
+        priority: 'LOW',
         cookedAt: new Date(now.getTime() - 5 * 3600000),
         expiryAt: new Date(now.getTime() + 2 * 3600000),
         safetyBufferMinutes: 60,
@@ -378,6 +385,7 @@ const runDemoSeed = async () => {
         totalQuantity: 35,
         remainingQuantity: 35,
         unit: 'packets',
+        priority: 'LOW',
         cookedAt: new Date(now.getTime() - 10 * 3600000),
         expiryAt: new Date(now.getTime() - 90 * 60000), // In the past
         safetyBufferMinutes: 60,
@@ -418,6 +426,7 @@ const runDemoSeed = async () => {
         unit: 'plates',
         dietaryPreference: 'vegetarian',
         neededBy: new Date(now.getTime() + 4 * 3600000),
+        priority: 'HIGH',
         urgency: 'HIGH',
         status: REQUIREMENT_STATUS.OPEN,
         location: recipientSunshine.location,
@@ -431,6 +440,7 @@ const runDemoSeed = async () => {
         unit: 'kg',
         dietaryPreference: 'any',
         neededBy: new Date(now.getTime() + 24 * 3600000),
+        priority: 'MEDIUM',
         urgency: 'MEDIUM',
         status: REQUIREMENT_STATUS.OPEN,
         location: recipientShelter.location,
@@ -444,7 +454,8 @@ const runDemoSeed = async () => {
         unit: 'packets',
         dietaryPreference: 'vegetarian',
         neededBy: new Date(now.getTime() + 5 * 3600000),
-        urgency: 'MEDIUM',
+        priority: 'LOW',
+        urgency: 'LOW',
         status: REQUIREMENT_STATUS.OPEN,
         location: recipientNGO.location,
         address: recipientNGO.address,
@@ -457,6 +468,7 @@ const runDemoSeed = async () => {
         unit: 'packets',
         dietaryPreference: 'any',
         neededBy: new Date(now.getTime() + 2 * 3600000),
+        priority: 'HIGH',
         urgency: 'CRITICAL',
         status: REQUIREMENT_STATUS.OPEN,
         location: recipientSunshine.location,
@@ -573,6 +585,7 @@ const runDemoSeed = async () => {
     // =========================================================================
     // 6. DELIVERY FLEET TASKS
     // =========================================================================
+    const driver1 = usersMap['agent@delivery.com'];
     const deliveryTaskDefinitions = [
       {
         donationId: 'don-103',

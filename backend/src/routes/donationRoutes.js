@@ -11,6 +11,13 @@ const {
 } = require('../validations/donationValidation');
 const { ROLES } = require('../constants/roles');
 const upload = require('../middlewares/uploadMiddleware');
+const matchingController = require('../controllers/matchingController');
+const {
+  splitPlanQuerySchema,
+  confirmSplitPlanSchema,
+  updateAllotModeSchema,
+} = require('../validations/matchingValidation');
+const { requireFeatureFlag } = require('../constants/featureFlags');
 
 const router = express.Router();
 
@@ -72,6 +79,30 @@ router.post(
   '/:id/accept',
   authorizeRoles(ROLES.RECIPIENT, ROLES.ADMIN),
   donationController.acceptDonation
+);
+
+// GET /api/v1/donations/:id/split-plan - Propose multi-recipient allocation
+router.get(
+  '/:id/split-plan',
+  requireFeatureFlag('FEATURE_SPLIT'),
+  validate({ query: splitPlanQuerySchema }),
+  matchingController.getSplitPlan
+);
+
+// POST /api/v1/donations/:id/split-plan/confirm - Confirm split plan offers
+router.post(
+  '/:id/split-plan/confirm',
+  requireFeatureFlag('FEATURE_SPLIT'),
+  validate({ body: confirmSplitPlanSchema }),
+  matchingController.confirmSplitPlan
+);
+
+// PATCH /api/v1/donations/:id/allot-mode - Switch between MANUAL and AUTO
+router.patch(
+  '/:id/allot-mode',
+  requireFeatureFlag('FEATURE_AUTO_ALLOT'),
+  validate({ body: updateAllotModeSchema }),
+  matchingController.updateAllotMode
 );
 
 // PATCH /api/v1/donations/:id/reopen - Reopen cancelled or remaining donation

@@ -57,6 +57,7 @@ const createDonationSchema = z
     location: locationSchema,
     address: addressSchema,
     areaLabel: z.string().trim().max(100).optional(),
+    priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).default('MEDIUM'),
   })
   .strict()
   .superRefine((data, ctx) => {
@@ -141,6 +142,7 @@ const updateDonationSchema = z
       .max(5)
       .optional(),
     areaLabel: z.string().trim().max(100).optional(),
+    priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
   })
   .strict();
 

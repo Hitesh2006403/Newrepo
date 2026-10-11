@@ -34,17 +34,44 @@ const DeliveryTaskSchema = new mongoose.Schema(
       enum: ['NORMAL', 'HIGH', 'URGENT', 'CRITICAL'],
       default: 'HIGH',
     },
+    priority: {
+      type: String,
+      enum: ['LOW', 'MEDIUM', 'HIGH'],
+      default: 'MEDIUM',
+      index: true,
+    },
+    priorityWeight: {
+      type: Number,
+      enum: [1, 2, 3],
+      default: 2,
+      index: true,
+    },
     pickup: {
       location: { type: String, required: true },
+      coordinates: { type: [Number], default: null }, // [longitude, latitude]
       donorName: { type: String, required: true },
       donorPhone: { type: String, default: '+91 98765 43210' },
       deadline: { type: Date, default: () => new Date(Date.now() + 2 * 60 * 60 * 1000) },
     },
     dropoff: {
       location: { type: String, required: true },
+      coordinates: { type: [Number], default: null }, // [longitude, latitude]
       recipientName: { type: String, required: true },
       recipientPhone: { type: String, default: '+91 91234 56789' },
       deadline: { type: Date, default: () => new Date(Date.now() + 3 * 60 * 60 * 1000) },
+    },
+    batchId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    weightKg: {
+      type: Number,
+      default: 0,
+    },
+    portions: {
+      type: Number,
+      default: 0,
     },
     currentMilestone: {
       type: String,
@@ -71,6 +98,38 @@ const DeliveryTaskSchema = new mongoose.Schema(
     payout: {
       type: Number,
       default: 95,
+    },
+    acceptanceId: {
+      type: String,
+      default: null,
+      index: true,
+    },
+    payerMode: {
+      type: String,
+      enum: ['NONE', 'DONOR', 'RECIPIENT', 'SPLIT'],
+      default: 'NONE',
+      index: true,
+    },
+    deliveryFee: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    feeVersion: {
+      type: Number,
+      default: 1,
+    },
+    feeLocked: {
+      type: Boolean,
+      default: false,
+    },
+    settled: {
+      type: Boolean,
+      default: false,
+    },
+    isVolunteer: {
+      type: Boolean,
+      default: true,
     },
     porterDetails: {
       orderId: { type: String, default: null },
@@ -116,8 +175,17 @@ const DeliveryTaskSchema = new mongoose.Schema(
   }
 );
 
+DeliveryTaskSchema.pre('validate', function () {
+  const { PRIORITY_WEIGHTS } = require('../constants/priority');
+  if (this.priority) {
+    this.priorityWeight = PRIORITY_WEIGHTS[this.priority] || 2;
+  }
+});
+
 DeliveryTaskSchema.index({ currentMilestone: 1, createdAt: -1 });
+DeliveryTaskSchema.index({ currentMilestone: 1, 'pickup.deadline': 1, priorityWeight: -1 });
 
 const DeliveryTask = mongoose.model('DeliveryTask', DeliveryTaskSchema);
 
 module.exports = DeliveryTask;
+

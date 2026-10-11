@@ -21,6 +21,7 @@ const ACCEPTANCE_STATUS = Object.freeze({
   HANDOVER_VERIFIED: 'HANDOVER_VERIFIED',   // QR verified at recipient site
   COMPLETED: 'COMPLETED',                   // Final safety check passed [FINAL]
   CANCELLED: 'CANCELLED',                   // Cancelled before pickup [FINAL]
+  REJECTED: 'REJECTED',                     // Declined or rejected by party [FINAL]
   REJECTED_UNSAFE: 'REJECTED_UNSAFE',       // Failed safety check; compost/disposal [FINAL]
 });
 
@@ -34,6 +35,7 @@ const FINAL_DONATION_STATUSES = Object.freeze([
 const FINAL_ACCEPTANCE_STATUSES = Object.freeze([
   ACCEPTANCE_STATUS.COMPLETED,
   ACCEPTANCE_STATUS.CANCELLED,
+  ACCEPTANCE_STATUS.REJECTED,
   ACCEPTANCE_STATUS.REJECTED_UNSAFE,
 ]);
 
