@@ -37,3 +37,23 @@ yarn-error.log*
 .DS_Store
 .vscode
 .idea
+
+# Environment & Secret Shields
+.env.*
+!.env.example
+
+# Test & Coverage Reports
+coverage/
+playwright-report/
+test-results/
+
+# Build Outputs
+build/
+
+# Documentation Screenshots & Backups
+docs/screenshots/
+*.backup
+
+# Agent & Workspace Temporary Files
+.gemini/
+scratch/

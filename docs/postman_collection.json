@@ -1,0 +1,146 @@
+{
+  "info": {
+    "name": "Share A Plate - Priority Feature API Collection",
+    "description": "Postman collection covering User-Chosen Priority (LOW, MEDIUM, HIGH) endpoints, filtering, sorting, conditional PATCH, and meta routes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Metadata & System Info",
+      "item": [
+        {
+          "name": "GET Meta (Priorities & Weights)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/meta",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "meta"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Donations API",
+      "item": [
+        {
+          "name": "Create Donation (with Priority)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{donorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"foodName\": \"100 Lunch Thali Meals\",\n  \"foodType\": \"cooked_meals\",\n  \"dietaryType\": \"vegetarian\",\n  \"totalQuantity\": 100,\n  \"unit\": \"plates\",\n  \"priority\": \"HIGH\",\n  \"cookedAt\": \"2026-10-11T12:00:00.000Z\",\n  \"expiryAt\": \"2026-10-11T18:00:00.000Z\",\n  \"safetyBufferMinutes\": 60,\n  \"pickupWindowStart\": \"2026-10-11T12:30:00.000Z\",\n  \"pickupWindowEnd\": \"2026-10-11T16:00:00.000Z\",\n  \"packagingType\": \"sealed_containers\",\n  \"instructions\": \"Rear loading bay\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/donations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "donations"]
+            }
+          }
+        },
+        {
+          "name": "List Available Donations (Priority Filtered & Sorted)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/donations?priority=HIGH,MEDIUM&sort=priority_desc&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "donations"],
+              "query": [
+                { "key": "priority", "value": "HIGH,MEDIUM" },
+                { "key": "sort", "value": "priority_desc" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH Donation Priority (While AVAILABLE)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{donorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priority\": \"HIGH\",\n  \"notes\": \"Increased priority due to immediate pickup requirement\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/donations/{{donationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "donations", "{{donationId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Requirements API",
+      "item": [
+        {
+          "name": "Create Requirement (with Priority)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{recipientToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Evening meals needed for shelter children\",\n  \"foodType\": \"cooked_meals\",\n  \"quantityNeeded\": 50,\n  \"unit\": \"plates\",\n  \"dietaryPreference\": \"vegetarian\",\n  \"neededBy\": \"2026-10-11T19:00:00.000Z\",\n  \"priority\": \"HIGH\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/requirements",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "requirements"]
+            }
+          }
+        },
+        {
+          "name": "List Requirements (Filtered by Priority)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/requirements?priority=HIGH&sort=priority_desc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "requirements"],
+              "query": [
+                { "key": "priority", "value": "HIGH" },
+                { "key": "sort", "value": "priority_desc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH Requirement Priority (While OPEN)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{recipientToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priority\": \"HIGH\",\n  \"quantityNeeded\": 60\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/requirements/{{requirementId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "requirements", "{{requirementId}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
