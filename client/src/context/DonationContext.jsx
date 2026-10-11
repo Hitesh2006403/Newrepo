@@ -90,6 +90,20 @@ export const DonationProvider = ({ children }) => {
     }
   };
 
+  // Update donation (owner donor only while AVAILABLE)
+  const updateDonation = async (donationId, updateData) => {
+    try {
+      const updated = await api.updateDonation(donationId, updateData);
+      setDonations((prev) => prev.map((d) => (d.id === donationId ? { ...d, ...updated } : d)));
+      addToast('Donation updated successfully!', 'success');
+      loadData();
+      return updated;
+    } catch (err) {
+      addToast('Failed to update donation: ' + err.message, 'error');
+      throw err;
+    }
+  };
+
   // Recipient submits requirement
   const postRequirement = async (reqData) => {
     try {
@@ -103,6 +117,21 @@ export const DonationProvider = ({ children }) => {
       throw err;
     }
   };
+
+  // Update requirement (recipient only while OPEN)
+  const updateRequirement = async (requirementId, updateData) => {
+    try {
+      const updated = await api.updateRequirement(requirementId, updateData);
+      setRequirements((prev) => prev.map((r) => (r.id === requirementId ? { ...r, ...updated } : r)));
+      addToast('Requirement updated successfully!', 'success');
+      loadData();
+      return updated;
+    } catch (err) {
+      addToast('Failed to update requirement: ' + err.message, 'error');
+      throw err;
+    }
+  };
+
 
   // Recipient claims full or partial quantity
   const acceptDonation = async (claimData) => {
@@ -319,8 +348,10 @@ export const DonationProvider = ({ children }) => {
         loading,
         refresh: loadData,
         createDonation,
+        updateDonation,
         reopenDonation,
         postRequirement,
+        updateRequirement,
         acceptDonation,
         updateDeliveryMilestone,
         claimDeliveryTask,

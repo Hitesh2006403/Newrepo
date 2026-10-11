@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
 import { StatusBadge } from '../common/StatusBadge';
+import { PriorityBadge } from '../common/PriorityBadge';
 import { ExpiryTimer } from '../common/ExpiryTimer';
 import { Search, Filter, RotateCw, QrCode, ExternalLink } from 'lucide-react';
 
 export const DonationMonitorTable = ({ donations, onOpenQr, onReopen }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [priorityFilter, setPriorityFilter] = useState('ALL');
 
   const filtered = donations.filter((d) => {
     const matchesSearch =
       d.foodName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       d.donorName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || d.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesPriority = priorityFilter === 'ALL' || (d.priority || 'MEDIUM') === priorityFilter;
+    return matchesSearch && matchesStatus && matchesPriority;
   });
 
   return (
@@ -39,6 +42,18 @@ export const DonationMonitorTable = ({ donations, onOpenQr, onReopen }) => {
             />
           </div>
 
+          {/* Priority Filter */}
+          <select
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+            className="px-3 py-1.5 rounded-xl border border-slate-300 text-xs bg-white text-slate-700"
+          >
+            <option value="ALL">All Priorities</option>
+            <option value="HIGH">High Priority</option>
+            <option value="MEDIUM">Medium Priority</option>
+            <option value="LOW">Low Priority</option>
+          </select>
+
           {/* Status Filter */}
           <select
             value={statusFilter}
@@ -63,6 +78,7 @@ export const DonationMonitorTable = ({ donations, onOpenQr, onReopen }) => {
             <tr>
               <th className="py-3 px-4">Item & Donor</th>
               <th className="py-3 px-4">Remaining / Initial</th>
+              <th className="py-3 px-4">Priority</th>
               <th className="py-3 px-4">Expiry Window</th>
               <th className="py-3 px-4">Status</th>
               <th className="py-3 px-4 text-right">Actions</th>
@@ -77,6 +93,9 @@ export const DonationMonitorTable = ({ donations, onOpenQr, onReopen }) => {
                 </td>
                 <td className="py-3 px-4 font-mono font-medium">
                   {d.remainingQuantity} / {d.initialQuantity} {d.unit}
+                </td>
+                <td className="py-3 px-4">
+                  <PriorityBadge priority={d.priority} />
                 </td>
                 <td className="py-3 px-4">
                   <ExpiryTimer

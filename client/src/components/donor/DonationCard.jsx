@@ -1,5 +1,6 @@
 import React from 'react';
 import { StatusBadge } from '../common/StatusBadge';
+import { PriorityBadge } from '../common/PriorityBadge';
 import { ExpiryTimer } from '../common/ExpiryTimer';
 import {
   MapPin,
@@ -10,11 +11,15 @@ import {
   CheckCircle,
   Clock,
   Sparkles,
+  Edit3,
+  GitFork,
 } from 'lucide-react';
+import AllotmentModeToggle from '../../features/matching/AllotmentModeToggle';
 
-export const DonationCard = ({ donation, onShowQr, onReopen }) => {
+export const DonationCard = ({ donation, onShowQr, onReopen, onEdit, onSplit }) => {
   const isPartiallyClaimed = donation.status === 'PARTIALLY_ACCEPTED';
   const isEligibleToReopen = donation.status === 'CANCELLED' || (isPartiallyClaimed && donation.remainingQuantity > 0);
+  const isEditable = donation.status === 'AVAILABLE' && (!donation.acceptances || donation.acceptances.length === 0);
 
   const percentClaimed = Math.round(
     ((donation.initialQuantity - donation.remainingQuantity) / donation.initialQuantity) * 100
@@ -32,9 +37,10 @@ export const DonationCard = ({ donation, onShowQr, onReopen }) => {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-black/20" />
 
-          {/* Top Status Badges */}
+          {/* Top Status & Priority Badges */}
           <div className="absolute top-3 left-3 flex items-center gap-1.5 flex-wrap">
             <StatusBadge status={donation.status} />
+            <PriorityBadge priority={donation.priority || 'MEDIUM'} compact />
             <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border shadow-xs ${
               donation.dietaryCategory === 'veg'
                 ? 'bg-emerald-600 text-white border-emerald-400'
@@ -50,6 +56,7 @@ export const DonationCard = ({ donation, onShowQr, onReopen }) => {
               </span>
             )}
           </div>
+
 
           {/* Unit & Storage Badge */}
           <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white text-xs">
@@ -129,11 +136,23 @@ export const DonationCard = ({ donation, onShowQr, onReopen }) => {
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span className="truncate">Hygienic prep verified • Sealed packaging</span>
           </div>
+
+          {/* Allotment Mode Strategy Toggle (Donor Owner) */}
+          {donation.status === 'AVAILABLE' && (
+            <div className="pt-1">
+              <AllotmentModeToggle
+                donation={donation}
+                onModeChange={(mode) => {
+                  donation.allotMode = mode;
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
       {/* Card Action Footer */}
-      <div className="p-5 pt-0 flex items-center gap-2">
+      <div className="p-5 pt-0 flex items-center gap-2 flex-wrap">
         <button
           onClick={() => onShowQr(donation)}
           className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-slate-300 hover:border-slate-400 bg-white text-slate-700 text-xs font-semibold shadow-2xs hover:bg-slate-50 transition"
@@ -141,6 +160,27 @@ export const DonationCard = ({ donation, onShowQr, onReopen }) => {
           <QrCode className="w-4 h-4 text-slate-600" />
           <span>Handover QR</span>
         </button>
+
+        {onSplit && donation.remainingQuantity >= 5 && ['AVAILABLE', 'PARTIALLY_ACCEPTED'].includes(donation.status) && (
+          <button
+            onClick={() => onSplit(donation)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-rose-200 hover:border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold shadow-2xs transition"
+            title="Split surplus among multiple nearby shelters"
+          >
+            <GitFork className="w-3.5 h-3.5 text-rose-600" />
+            <span>Split Surplus</span>
+          </button>
+        )}
+
+        {isEditable && onEdit && (
+          <button
+            onClick={() => onEdit(donation)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-rose-300 hover:border-rose-400 bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold transition shadow-2xs"
+          >
+            <Edit3 className="w-3.5 h-3.5 text-rose-700" />
+            <span>Edit</span>
+          </button>
+        )}
 
         {isEligibleToReopen && (
           <button

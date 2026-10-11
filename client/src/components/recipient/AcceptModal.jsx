@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Modal } from '../common/Modal';
+import { PriorityBadge } from '../common/PriorityBadge';
 import { useAuth } from '../../context/AuthContext';
 import { useDonations } from '../../context/DonationContext';
+import { DeliveryFeeSelector } from '../../features/fees/DeliveryFeeSelector';
 import { HeartHandshake, CheckCircle2, Split, Clock, MapPin } from 'lucide-react';
 
 export const AcceptModal = ({ isOpen, onClose, donation }) => {
@@ -11,6 +13,7 @@ export const AcceptModal = ({ isOpen, onClose, donation }) => {
   const maxQty = donation ? donation.remainingQuantity : 1;
   const [claimQuantity, setClaimQuantity] = useState(maxQty);
   const [pickupSlot, setPickupSlot] = useState('Immediate pickup (Within 45 mins)');
+  const [deliveryFee, setDeliveryFee] = useState({ payerMode: 'NONE', amount: 0 });
   const [submitting, setSubmitting] = useState(false);
 
   // Sync state if donation changes
@@ -34,6 +37,7 @@ export const AcceptModal = ({ isOpen, onClose, donation }) => {
         recipientName: currentUser?.organizationName || currentUser?.name || 'Grace Hope Shelter',
         quantityAccepted: Number(claimQuantity),
         notes: pickupSlot,
+        deliveryFee,
       });
       onClose();
     } catch (err) {
@@ -54,7 +58,10 @@ export const AcceptModal = ({ isOpen, onClose, donation }) => {
             className="w-16 h-16 rounded-xl object-cover border border-slate-200 shrink-0"
           />
           <div className="min-w-0 flex-1">
-            <h4 className="font-bold text-sm text-slate-800 line-clamp-1">{donation.foodName}</h4>
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="font-bold text-sm text-slate-800 line-clamp-1">{donation.foodName}</h4>
+              <PriorityBadge priority={donation.priority || 'MEDIUM'} compact />
+            </div>
             <p className="text-xs text-slate-500">{donation.donorName}</p>
             <div className="flex items-center gap-1 text-[11px] text-slate-400 mt-1">
               <MapPin className="w-3 h-3 text-slate-400" />
@@ -62,6 +69,7 @@ export const AcceptModal = ({ isOpen, onClose, donation }) => {
             </div>
           </div>
         </div>
+
 
         {/* Split Donation / Quantity Selector */}
         <div className="border border-amber-200 bg-amber-50/50 rounded-2xl p-4 space-y-3">
@@ -142,6 +150,13 @@ export const AcceptModal = ({ isOpen, onClose, donation }) => {
             <option value="Self-pickup by shelter volunteer">Self-pickup by shelter volunteer vehicle</option>
           </select>
         </div>
+
+        {/* Delivery Fee Choice Agreement */}
+        <DeliveryFeeSelector
+          distanceKm={donation.distanceKm || 3.5}
+          userRole="recipient"
+          onChange={setDeliveryFee}
+        />
 
         <div className="flex items-center justify-end gap-3 pt-2">
           <button

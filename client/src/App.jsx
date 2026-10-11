@@ -12,6 +12,7 @@ import { DeliveryDashboard } from './pages/DeliveryDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AuthModal } from './pages/AuthPage';
 import { LoginPage } from './pages/LoginPage';
+import NearbyMapPage from './features/maps/NearbyMapPage';
 import {
   HeartHandshake,
   ShieldCheck,
@@ -27,6 +28,7 @@ function DashboardRouter() {
   const [isPostReqOpen, setIsPostReqOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isLoginPageVisible, setIsLoginPageVisible] = useState(false);
+  const [isNearbyMapOpen, setIsNearbyMapOpen] = useState(false);
 
   if (isLoginPageVisible) {
     return (
@@ -48,27 +50,35 @@ function DashboardRouter() {
         onOpenPostRequirement={() => setIsPostReqOpen(true)}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onOpenLogin={() => setIsLoginPageVisible(true)}
+        onToggleMap={() => setIsNearbyMapOpen(!isNearbyMapOpen)}
+        isMapOpen={isNearbyMapOpen}
       />
 
       {/* Main Application Content Body */}
       <main className="flex-1 max-w-[1680px] w-full mx-auto px-4 sm:px-6 lg:px-10 py-6">
-        {role === 'donor' && (
-          <DonorDashboard
-            isCreateOpen={isCreateDonationOpen}
-            setIsCreateOpen={setIsCreateDonationOpen}
-          />
+        {isNearbyMapOpen ? (
+          <NearbyMapPage />
+        ) : (
+          <>
+            {role === 'donor' && (
+              <DonorDashboard
+                isCreateOpen={isCreateDonationOpen}
+                setIsCreateOpen={setIsCreateDonationOpen}
+              />
+            )}
+
+            {role === 'recipient' && (
+              <RecipientDashboard
+                isPostReqOpen={isPostReqOpen}
+                setIsPostReqOpen={setIsPostReqOpen}
+              />
+            )}
+
+            {role === 'delivery' && <DeliveryDashboard />}
+
+            {role === 'admin' && <AdminDashboard />}
+          </>
         )}
-
-        {role === 'recipient' && (
-          <RecipientDashboard
-            isPostReqOpen={isPostReqOpen}
-            setIsPostReqOpen={setIsPostReqOpen}
-          />
-        )}
-
-        {role === 'delivery' && <DeliveryDashboard />}
-
-        {role === 'admin' && <AdminDashboard />}
       </main>
 
       {/* Footer */}

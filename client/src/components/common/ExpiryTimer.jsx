@@ -41,7 +41,7 @@ export const ExpiryTimer = ({ expiryDeadline, safetyBufferMinutes = 0, compact =
     return (
       <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded border ${colorClass}`}>
         <Clock className={`w-3 h-3 ${iconClass}`} />
-        <span>{timeLeft.label}</span>
+        <span>Time left: {timeLeft.label}</span>
       </span>
     );
   }
@@ -50,7 +50,7 @@ export const ExpiryTimer = ({ expiryDeadline, safetyBufferMinutes = 0, compact =
     <div className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-md border ${colorClass}`}>
       <div className="flex items-center gap-1.5">
         <Clock className={`w-3.5 h-3.5 ${iconClass}`} />
-        <span className="font-semibold">{timeLeft.label}</span>
+        <span className="font-semibold">Time left: {timeLeft.label}</span>
       </div>
       {safetyBufferMinutes > 0 && (
         <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium ml-2">

@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useDonations } from '../context/DonationContext';
+import { useNotification } from '../context/NotificationContext';
+import { api } from '../services/api';
 import { DeliveryTaskCard } from '../components/delivery/DeliveryTaskCard';
 import { QrVerifyModal } from '../components/delivery/QrVerifyModal';
 import { QrCodeModal } from '../components/common/QrCodeModal';
 import { PorterDispatchModal } from '../components/delivery/PorterDispatchModal';
 import { ReviewsSection } from '../components/common/ReviewsSection';
+import { BatchRouteCard, BatchBuilderModal } from '../features/batch';
 import {
   Bike,
   Truck,
@@ -21,6 +24,9 @@ import {
   ArrowRight,
   Sparkles,
   Phone,
+  Layers,
+  CarFront,
+  Car,
 } from 'lucide-react';
 
 export const DeliveryDashboard = () => {
@@ -30,11 +36,20 @@ export const DeliveryDashboard = () => {
     updateDeliveryMilestone,
     claimDeliveryTask,
     donations,
+    refresh,
   } = useDonations();
+  const { addToast } = useNotification();
 
-  // Rider duty status
+  // Rider duty status & fee preferences
   const [isOnline, setIsOnline] = useState(true);
   const [selectedVehicle, setSelectedVehicle] = useState('2_WHEELER');
+  const [volunteerOnly, setVolunteerOnly] = useState(currentUser?.agentPreferences?.volunteerOnly || false);
+
+  // Batch co-routing state (Phase 4)
+  const [feedMode, setFeedMode] = useState('orders'); // 'orders' | 'batches'
+  const [batchesData, setBatchesData] = useState({ proposedBatches: [], suggestedBatches: [] });
+  const [loadingBatches, setLoadingBatches] = useState(false);
+  const [isBatchBuilderOpen, setIsBatchBuilderOpen] = useState(false);
 
   // Modals state
   const [selectedTaskForPickupScan, setSelectedTaskForPickupScan] = useState(null);
@@ -43,11 +58,59 @@ export const DeliveryDashboard = () => {
   const [porterModalTask, setPorterModalTask] = useState(null);
   const [isPorterModalOpen, setIsPorterModalOpen] = useState(false);
 
+  const fetchBatches = useCallback(async () => {
+    setLoadingBatches(true);
+    try {
+      const data = await api.getAvailableBatches({
+        vehicleType: selectedVehicle,
+        agentId: currentUser?._id || currentUser?.id,
+      });
+      setBatchesData(data || { proposedBatches: [], suggestedBatches: [] });
+    } catch (err) {
+      console.warn('Failed to load batches:', err);
+    } finally {
+      setLoadingBatches(false);
+    }
+  }, [selectedVehicle, currentUser]);
+
+  useEffect(() => {
+    fetchBatches();
+  }, [fetchBatches]);
+
+  const handleClaimBatch = async (batchId) => {
+    try {
+      await api.claimDeliveryBatch(batchId, {
+        agentId: currentUser?._id || currentUser?.id || 'user-delivery-1',
+        agentName: currentUser?.name || 'Assigned Driver',
+      });
+      addToast('Delivery batch claimed! All tasks locked and route sequenced.', 'success');
+      refresh?.();
+      fetchBatches();
+    } catch (err) {
+      addToast(err.message || 'Failed to claim batch', 'error');
+    }
+  };
+
+  const handleReleaseBatch = async (batchId) => {
+    try {
+      await api.releaseDeliveryBatch(batchId);
+      addToast('Batch run released back to pool', 'info');
+      refresh?.();
+      fetchBatches();
+    } catch (err) {
+      addToast(err.message || 'Failed to release batch', 'error');
+    }
+  };
+
   // Filter tasks into categories:
   // 1. Open Available Orders (Marketplace feed awaiting driver claim)
-  const openAvailableTasks = deliveryTasks.filter(
-    (t) => t.currentMilestone === 'OPEN_FOR_PICKUP'
-  );
+  const openAvailableTasks = deliveryTasks.filter((t) => {
+    if (t.currentMilestone !== 'OPEN_FOR_PICKUP') return false;
+    if (volunteerOnly) {
+      return t.isVolunteer || t.payerMode === 'NONE' || !t.deliveryFee || t.deliveryFee === 0;
+    }
+    return true;
+  });
 
   // 2. Assigned Active Deliveries
   const activeTasks = deliveryTasks.filter(
@@ -56,6 +119,17 @@ export const DeliveryDashboard = () => {
 
   // 3. Completed Rescues
   const completedTasks = deliveryTasks.filter((t) => t.currentMilestone === 'DELIVERED');
+
+  const handleSettleFee = async (task) => {
+    try {
+      const targetId = task.acceptanceId || task.id;
+      await api.settleDeliveryFee(targetId, { note: 'Direct cash/UPI settlement confirmed post-handover' });
+      addToast(`Fee for ${task.foodName} marked as settled!`, 'success');
+      refresh?.();
+    } catch (err) {
+      addToast('Failed to mark fee settled: ' + err.message, 'error');
+    }
+  };
 
   const handleOpenReceiptQr = (task, token) => {
     const matchingDonation = donations.find((d) => d.id === task.donationId) || {
@@ -112,7 +186,7 @@ export const DeliveryDashboard = () => {
             </div>
           </div>
 
-          {/* Porter-style Duty Toggle & Porter Dispatch Button */}
+          {/* Porter-style Duty Toggle & Volunteer Preference & Porter Dispatch Button */}
           <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/15 w-full sm:w-auto shrink-0 flex flex-col gap-3">
             {/* Duty Status Switch */}
             <div className="flex items-center justify-between gap-4">
@@ -134,6 +208,39 @@ export const DeliveryDashboard = () => {
               </button>
             </div>
 
+            {/* Volunteer-Only Toggle */}
+            <div className="flex items-center justify-between gap-4 border-t border-white/10 pt-2.5">
+              <div className="text-left">
+                <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <span>🌱 Volunteer Only</span>
+                </div>
+                <div className="text-[10px] text-blue-200/70">
+                  {volunteerOnly ? 'Free food deliveries only' : 'Accepts fees & stipends'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextVal = !volunteerOnly;
+                  setVolunteerOnly(nextVal);
+                  api.updateAgentPreferences({ volunteerOnly: nextVal }).catch(() => {});
+                  addToast(
+                    nextVal
+                      ? 'Switched to Volunteer-Only: radar will show free deliveries only'
+                      : 'Fee acceptance enabled: radar shows paid & volunteer deliveries',
+                    'info'
+                  );
+                }}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition ${
+                  volunteerOnly
+                    ? 'bg-emerald-400 text-slate-950 font-black'
+                    : 'bg-white/20 text-white hover:bg-white/30'
+                }`}
+              >
+                {volunteerOnly ? 'ON' : 'OFF'}
+              </button>
+            </div>
+
             <div className="border-t border-white/10 pt-3">
               <button
                 onClick={() => handleOpenPorterModal(null)}
@@ -150,38 +257,113 @@ export const DeliveryDashboard = () => {
         </div>
       </div>
 
-      {/* Available Deliveries Radar (Marketplace dispatch feed like Porter Partner) */}
+      {/* Available Deliveries Radar (Marketplace dispatch feed with Multi-Stop Batches) */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Radio className="w-5 h-5 text-emerald-600 animate-pulse" />
             <h3 className="text-lg font-bold text-slate-900">
               Nearby Pickups Radar
             </h3>
-            <span className="text-xs bg-emerald-100 text-emerald-800 font-extrabold px-2.5 py-0.5 rounded-full">
-              {openAvailableTasks.length} Broadcasted
-            </span>
+            {volunteerOnly && (
+              <span className="text-xs bg-teal-100 text-teal-800 font-bold px-2 py-0.5 rounded-full">
+                🌱 Filtered: Food-Only Volunteers
+              </span>
+            )}
           </div>
-          <span className="text-xs text-slate-500">Live Radius: 5.0 km</span>
+
+          {/* Mode Switcher & Create Batch Button */}
+          <div className="flex items-center gap-2">
+            <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setFeedMode('orders')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  feedMode === 'orders'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <span>Individual ({openAvailableTasks.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFeedMode('batches')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  feedMode === 'batches'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Multi-Stop Runs ({batchesData.proposedBatches?.length || 0})</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsBatchBuilderOpen(true)}
+              className="py-1.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Build Run</span>
+            </button>
+          </div>
         </div>
 
-        {openAvailableTasks.length === 0 ? (
-          <div className="bg-slate-50 rounded-2xl border border-dashed border-slate-300 p-6 text-center text-slate-500 text-xs">
-            No unassigned pickups broadcasted right now. All current rescue requests have been assigned to active drivers or Porter couriers.
-          </div>
+        {feedMode === 'orders' ? (
+          openAvailableTasks.length === 0 ? (
+            <div className="bg-slate-50 rounded-2xl border border-dashed border-slate-300 p-6 text-center text-slate-500 text-xs">
+              {volunteerOnly
+                ? 'No volunteer (free food) pickups broadcasted right now. Try switching Volunteer-Only off to view fee-supported deliveries.'
+                : 'No unassigned pickups broadcasted right now. All current rescue requests have been assigned to active drivers or Porter couriers.'}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {openAvailableTasks.map((task) => (
+                <DeliveryTaskCard
+                  key={task.id}
+                  task={task}
+                  onUpdateStatus={(taskId, milestone) => updateDeliveryMilestone(taskId, milestone)}
+                  onClaimTask={(taskId, extra) => claimDeliveryTask(taskId, { agentId: currentUser?.email || 'user-delivery-1', ...extra })}
+                  onOpenPickupScan={(t) => setSelectedTaskForPickupScan(t)}
+                  onOpenReceiptQr={(t) => handleOpenReceiptQr(t)}
+                  onOpenPorterModal={(t) => handleOpenPorterModal(t)}
+                  onSettleFee={(t) => handleSettleFee(t)}
+                />
+              ))}
+            </div>
+          )
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {openAvailableTasks.map((task) => (
-              <DeliveryTaskCard
-                key={task.id}
-                task={task}
-                onUpdateStatus={(taskId, milestone) => updateDeliveryMilestone(taskId, milestone)}
-                onClaimTask={(taskId) => claimDeliveryTask(taskId, { agentId: currentUser?.email || 'user-delivery-1' })}
-                onOpenPickupScan={(t) => setSelectedTaskForPickupScan(t)}
-                onOpenReceiptQr={(t) => handleOpenReceiptQr(t)}
-                onOpenPorterModal={(t) => handleOpenPorterModal(t)}
-              />
-            ))}
+          /* Multi-Stop Co-Routing Batches Feed */
+          <div className="space-y-4">
+            {batchesData.proposedBatches?.length === 0 && batchesData.suggestedBatches?.length === 0 ? (
+              <div className="bg-slate-50 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500 text-xs space-y-3">
+                <Layers className="w-8 h-8 text-slate-400 mx-auto" />
+                <div>
+                  No pre-computed batches available right now for <strong>{selectedVehicle}</strong>.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsBatchBuilderOpen(true)}
+                  className="px-4 py-2 bg-blue-600 text-white font-bold text-xs rounded-xl hover:bg-blue-700 transition"
+                >
+                  Combine Open Tasks into a Batch
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {batchesData.proposedBatches?.map((batch) => (
+                  <BatchRouteCard
+                    key={batch._id}
+                    batch={batch}
+                    currentAgentId={currentUser?._id}
+                    onClaim={handleClaimBatch}
+                    onRelease={handleReleaseBatch}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -213,6 +395,7 @@ export const DeliveryDashboard = () => {
                 onOpenPickupScan={(t) => setSelectedTaskForPickupScan(t)}
                 onOpenReceiptQr={(t) => handleOpenReceiptQr(t)}
                 onOpenPorterModal={(t) => handleOpenPorterModal(t)}
+                onSettleFee={(t) => handleSettleFee(t)}
               />
             ))}
           </div>
@@ -235,6 +418,7 @@ export const DeliveryDashboard = () => {
                 onOpenPickupScan={() => {}}
                 onOpenReceiptQr={() => {}}
                 onOpenPorterModal={() => {}}
+                onSettleFee={(t) => handleSettleFee(t)}
               />
             ))}
           </div>
@@ -273,6 +457,18 @@ export const DeliveryDashboard = () => {
         task={porterModalTask}
         donation={donations[0]}
         onSuccess={() => setIsPorterModalOpen(false)}
+      />
+
+      {/* PHASE 4: BATCH BUILDER MODAL */}
+      <BatchBuilderModal
+        isOpen={isBatchBuilderOpen}
+        onClose={() => setIsBatchBuilderOpen(false)}
+        availableTasks={openAvailableTasks}
+        onBatchCreated={(newBatch) => {
+          addToast(`Batch ${newBatch.batchNumber || ''} created successfully!`, 'success');
+          fetchBatches();
+          setFeedMode('batches');
+        }}
       />
     </div>
   );

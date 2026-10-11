@@ -11,10 +11,18 @@ import {
   Sparkles,
   ShieldCheck,
   UserCheck,
+  Radar,
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { ThemeToggle } from '../../features/spatial';
 
-export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenLogin }) => {
+export const Navbar = ({
+  onOpenCreateDonation,
+  onOpenPostRequirement,
+  onOpenLogin,
+  onToggleMap,
+  isMapOpen = false,
+}) => {
   const { currentUser, role, switchRole } = useAuth();
   const { impactMetrics } = useDonations();
 
@@ -135,6 +143,20 @@ export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenLogi
               </button>
             )}
 
+            {/* Nearby Proximity Map Radar Button */}
+            <button
+              onClick={onToggleMap}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition shadow-xs ${
+                isMapOpen
+                  ? 'bg-amber-500 text-slate-950 shadow-md font-black'
+                  : 'bg-amber-50 hover:bg-amber-100/80 border border-amber-200 text-amber-900'
+              }`}
+              title="Open 5-10km Proximity Radar Map"
+            >
+              <Radar className="w-4 h-4 text-amber-600 animate-spin-slow" />
+              <span className="hidden sm:inline">Nearby Map</span>
+            </button>
+
             {/* Member Login & Credentials Portal */}
             <button
               onClick={onOpenLogin}
@@ -144,6 +166,9 @@ export const Navbar = ({ onOpenCreateDonation, onOpenPostRequirement, onOpenLogi
               <UserCheck className="w-4 h-4 text-rose-600" />
               <span className="hidden sm:inline">Member Login</span>
             </button>
+
+            {/* Theme Toggle (Light / Dark) */}
+            <ThemeToggle />
 
             {/* Reset Demo button for quick re-testing */}
             <button

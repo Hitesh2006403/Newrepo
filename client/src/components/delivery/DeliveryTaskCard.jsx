@@ -1,9 +1,8 @@
-import React from 'react';
+import { PriorityBadge } from '../common/PriorityBadge';
 import {
   MapPin,
   Phone,
   Navigation,
-  Clock,
   QrCode,
   ShieldAlert,
   CheckCircle2,
@@ -19,6 +18,7 @@ export const DeliveryTaskCard = ({
   onOpenReceiptQr,
   onClaimTask,
   onOpenPorterModal,
+  onSettleFee,
 }) => {
   const isDelivered = task.currentMilestone === 'DELIVERED';
   const isPickedUp = task.currentMilestone === 'PICKED_UP';
@@ -46,10 +46,24 @@ export const DeliveryTaskCard = ({
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+            <PriorityBadge priority={task.priority} />
             {isPorter && (
               <span className="text-[9px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-md uppercase tracking-wider shadow-xs">
                 Porter Fleet
+              </span>
+            )}
+            {task.settled ? (
+              <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-md uppercase tracking-wider shadow-xs">
+                ✓ Settled
+              </span>
+            ) : task.deliveryFee > 0 && task.payerMode !== 'NONE' ? (
+              <span className="text-[9px] font-black bg-blue-100 text-blue-800 border border-blue-300 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                💰 ₹{task.deliveryFee}
+              </span>
+            ) : (
+              <span className="text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-md uppercase tracking-wider">
+                🌱 Volunteer
               </span>
             )}
             <span
@@ -108,15 +122,19 @@ export const DeliveryTaskCard = ({
             </div>
           </div>
 
-          {/* Thermal Container Advice */}
+          {/* Thermal Container Advice & Fee info */}
           <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-2.5 text-[11px] text-amber-900 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
               <span>Load: {task.vehicleSuggestion || 'Use insulated delivery carrier'}</span>
             </div>
-            {task.payout && (
-              <span className="font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md text-[10px] shrink-0">
-                ₹{task.payout} Volunteer Stipend
+            {task.deliveryFee > 0 && task.payerMode !== 'NONE' ? (
+              <span className="font-extrabold text-blue-800 bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md text-[10px] shrink-0">
+                ₹{task.deliveryFee} Stipend ({task.payerMode === 'SPLIT' ? 'Split 50/50' : task.payerMode === 'DONOR' ? 'Donor' : 'Recipient'})
+              </span>
+            ) : (
+              <span className="font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px] shrink-0">
+                🌱 Volunteer Run (₹0 Fee)
               </span>
             )}
           </div>
@@ -157,11 +175,15 @@ export const DeliveryTaskCard = ({
         {isOpenForPickup && (
           <div className="space-y-2">
             <button
-              onClick={() => onClaimTask && onClaimTask(task.id)}
+              onClick={() => onClaimTask && onClaimTask(task.id, { feeVersion: task.feeVersion, expectedFeeVersion: task.feeVersion })}
               className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-md transition flex items-center justify-center gap-2"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>Accept Delivery Job (Claim Order)</span>
+              <span>
+                {task.deliveryFee > 0 && task.payerMode !== 'NONE'
+                  ? `Accept Delivery Job (₹${task.deliveryFee} Stipend)`
+                  : 'Accept Volunteer Delivery (Food-Only)'}
+              </span>
             </button>
             {onOpenPorterModal && (
               <button
@@ -208,9 +230,20 @@ export const DeliveryTaskCard = ({
         )}
 
         {isDelivered && (
-          <div className="w-full py-2 px-3 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs font-bold flex items-center justify-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-teal-600" />
-            <span>Handover Complete & Food Rescued!</span>
+          <div className="space-y-2">
+            <div className="w-full py-2 px-3 rounded-xl bg-teal-50 border border-teal-200 text-teal-800 text-xs font-bold flex items-center justify-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-teal-600" />
+              <span>Handover Complete & Food Rescued!</span>
+            </div>
+            {task.deliveryFee > 0 && !task.settled && onSettleFee && (
+              <button
+                type="button"
+                onClick={() => onSettleFee(task)}
+                className="w-full py-1.5 px-3 rounded-xl bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-900 text-xs font-bold transition flex items-center justify-center gap-1.5"
+              >
+                <span>Mark ₹{task.deliveryFee} Fee Settled (External)</span>
+              </button>
+            )}
           </div>
         )}
       </div>

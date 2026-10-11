@@ -5,6 +5,7 @@ import { DonationMonitorTable } from '../components/admin/DonationMonitorTable';
 import { QrCodeModal } from '../components/common/QrCodeModal';
 import { ReopenModal } from '../components/donor/ReopenModal';
 import { VerifiedTelemetryPanel } from '../components/admin/VerifiedTelemetryPanel';
+import { SpatialImpactHUD } from '../features/spatial';
 import {
   ShieldAlert,
   AlertTriangle,
@@ -27,6 +28,15 @@ export const AdminDashboard = () => {
     return diffMs > 0 && diffMs < 1.5 * 60 * 60 * 1000;
   });
 
+  const priorityCounts = donations.reduce(
+    (acc, d) => {
+      const p = d.priority || 'MEDIUM';
+      acc[p] = (acc[p] || 0) + 1;
+      return acc;
+    },
+    { HIGH: 0, MEDIUM: 0, LOW: 0 }
+  );
+
   return (
     <div className="space-y-8">
       {/* Admin Operations Banner */}
@@ -44,6 +54,9 @@ export const AdminDashboard = () => {
           </p>
         </div>
       </div>
+
+      {/* PHASE 5: SPATIAL 3D IMPACT TELEMETRY HUD */}
+      <SpatialImpactHUD />
 
       {/* Critical Platform Urgency Alerts */}
       {criticalItems.length > 0 && (
@@ -93,6 +106,21 @@ export const AdminDashboard = () => {
 
       {/* Donation Audit Monitor Table */}
       <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs">
+          <div className="text-xs font-bold text-slate-700">Platform Priority Distribution:</div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 border border-red-200">
+              High: {priorityCounts.HIGH}
+            </span>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+              Medium: {priorityCounts.MEDIUM}
+            </span>
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+              Low: {priorityCounts.LOW}
+            </span>
+          </div>
+        </div>
+
         <DonationMonitorTable
           donations={donations}
           onOpenQr={(don) => setSelectedDonationForQr(don)}

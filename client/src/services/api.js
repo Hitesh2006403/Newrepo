@@ -248,6 +248,26 @@ export const api = {
 
   getAllUsers: () => mockUsers,
 
+  getMeta: async () => {
+    try {
+      const res = await fetch(`${API_BASE}/meta`);
+      const json = await res.json();
+      if (res.ok && json.data) {
+        return json.data;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch /meta, using fallback:', e);
+    }
+    return {
+      priorities: [
+        { value: 'LOW', label: 'Low', weight: 1 },
+        { value: 'MEDIUM', label: 'Medium', weight: 2 },
+        { value: 'HIGH', label: 'High', weight: 3 },
+      ],
+      priorityWeights: { LOW: 1, MEDIUM: 2, HIGH: 3 },
+    };
+  },
+
   // ----------------------------------------------------
   // DONATIONS (Donor Journey)
   // ----------------------------------------------------
@@ -257,7 +277,13 @@ export const api = {
         const token = localStorage.getItem('sap_jwt_token');
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        const query = new URLSearchParams(filter).toString();
+        const params = new URLSearchParams();
+        Object.entries(filter).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== '') {
+            params.append(k, Array.isArray(v) ? v.join(',') : v);
+          }
+        });
+        const query = params.toString();
         const res = await fetch(`${API_BASE}/donations${query ? `?${query}` : ''}`, {
           headers,
           credentials: 'include',
@@ -268,6 +294,8 @@ export const api = {
           return list.map((d) => ({
             ...d,
             id: d.id || d._id,
+            priority: d.priority || 'MEDIUM',
+            priorityWeight: d.priorityWeight || 2,
             totalQuantity: d.totalQuantity || d.initialQuantity || 10,
             remainingQuantity: d.remainingQuantity !== undefined ? d.remainingQuantity : (d.totalQuantity || d.initialQuantity || 10),
             venueType: d.areaLabel || d.venueType || 'Others',
@@ -285,6 +313,7 @@ export const api = {
         console.warn('Live donations fetch error, using local fallback:', e);
       }
     }
+
     await delay(150);
     let list = [...mockDonations];
     if (filter.donorId) {
@@ -351,6 +380,7 @@ export const api = {
             formattedAddress,
           },
           areaLabel: donationData.venueType || 'Local Area',
+          priority: (donationData.priority || 'MEDIUM').toUpperCase(),
         };
 
         const res = await fetch(`${API_BASE}/donations`, {
@@ -362,7 +392,7 @@ export const api = {
         const json = await res.json();
         if (res.ok) {
           const created = json.data || json;
-          return { ...created, id: created.id || created._id };
+          return { ...created, id: created.id || created._id, priority: created.priority || payload.priority };
         }
       } catch (err) {
         console.warn('Backend createDonation error, saving locally:', err);
@@ -376,6 +406,7 @@ export const api = {
       remainingQuantity: Number(donationData.initialQuantity),
       handoverQrToken: 'SAP-QR-' + Date.now().toString(36).toUpperCase(),
       matchedRecipients: [],
+      priority: (donationData.priority || 'MEDIUM').toUpperCase(),
       ...donationData,
     };
     mockDonations.unshift(newDonation);
@@ -386,6 +417,37 @@ export const api = {
     save(STORAGE_KEYS.METRICS, mockMetrics);
 
     return newDonation;
+  },
+
+  updateDonation: async (donationId, updateData) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/donations/${donationId}`, {
+          method: 'PATCH',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(updateData),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          const updated = json.data || json;
+          return { ...updated, id: updated.id || updated._id };
+        }
+        throw new Error(json.message || 'Failed to update donation');
+      } catch (e) {
+        console.warn('Backend updateDonation error:', e);
+        throw e;
+      }
+    }
+    await delay(150);
+    const don = mockDonations.find((d) => d.id === donationId || d._id === donationId);
+    if (!don) throw new Error('Donation not found');
+    Object.assign(don, updateData);
+    save(STORAGE_KEYS.DONATIONS, mockDonations);
+    return don;
   },
 
   reopenDonation: async (donationId, notes = '') => {
@@ -424,45 +486,88 @@ export const api = {
   // ----------------------------------------------------
   // RECIPIENT JOURNEY & PARTIAL ACCEPTANCE
   // ----------------------------------------------------
-  getRequirements: async () => {
+  getRequirements: async (filter = {}) => {
     if (!USE_MOCK) {
       try {
         const token = localStorage.getItem('sap_jwt_token');
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        const res = await fetch(`${API_BASE}/recipient/requirements`, {
+        const params = new URLSearchParams();
+        Object.entries(filter).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== '') {
+            params.append(k, Array.isArray(v) ? v.join(',') : v);
+          }
+        });
+        const queryStr = params.toString();
+        const res = await fetch(`${API_BASE}/requirements${queryStr ? `?${queryStr}` : ''}`, {
           headers,
           credentials: 'include',
         });
         const json = await res.json();
         if (res.ok) {
           const list = Array.isArray(json) ? json : (json.data || []);
-          return list.map((r) => ({ ...r, id: r.id || r._id }));
+          return list.map((r) => ({
+            ...r,
+            id: r.id || r._id,
+            priority: r.priority || 'MEDIUM',
+            urgency: r.urgency || r.priority || 'MEDIUM',
+          }));
         }
       } catch (e) {
         console.warn('Backend requirements fetch error, using local fallback:', e);
       }
     }
     await delay(100);
-    return mockRequirements;
+    return mockRequirements.map((r) => ({
+      ...r,
+      priority: r.priority || 'MEDIUM',
+      urgency: r.urgency || r.priority || 'MEDIUM',
+    }));
   },
 
   postRequirement: async (reqData) => {
+    const effPriority = (reqData.priority || reqData.urgency || 'MEDIUM').toUpperCase();
     if (!USE_MOCK) {
       try {
         const token = localStorage.getItem('sap_jwt_token');
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        const res = await fetch(`${API_BASE}/recipient/requirements`, {
+        const payload = {
+          title: reqData.title || `Requirement for ${reqData.foodType || 'food'}`,
+          foodType: ['cooked_meals', 'raw_groceries', 'packaged_food', 'bakery_items'].includes(reqData.foodType)
+            ? reqData.foodType
+            : 'cooked_meals',
+          quantityNeeded: Math.round(Number(reqData.quantityNeeded || 20)),
+          unit: ['plates', 'kg', 'packets', 'servings'].includes(reqData.unit) ? reqData.unit : 'plates',
+          dietaryPreference: ['vegetarian', 'non_vegetarian', 'vegan', 'any'].includes(reqData.dietaryPreference)
+            ? reqData.dietaryPreference
+            : 'any',
+          neededBy: reqData.neededBefore || reqData.neededBy || new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+          priority: effPriority === 'CRITICAL' ? 'HIGH' : effPriority,
+          location: {
+            type: 'Point',
+            coordinates: [77.62, 12.97],
+          },
+          address: {
+            city: 'Bengaluru',
+            formattedAddress: reqData.location || 'Local Community Center, Bengaluru',
+          },
+        };
+        const res = await fetch(`${API_BASE}/requirements`, {
           method: 'POST',
           headers,
           credentials: 'include',
-          body: JSON.stringify(reqData),
+          body: JSON.stringify(payload),
         });
         const json = await res.json();
         if (res.ok) {
           const created = json.data || json;
-          return { ...created, id: created.id || created._id };
+          return {
+            ...created,
+            id: created.id || created._id,
+            priority: created.priority || payload.priority,
+            urgency: created.urgency || payload.priority,
+          };
         }
       } catch (e) {
         console.warn('Backend postRequirement error, saving locally:', e);
@@ -472,13 +577,52 @@ export const api = {
     const newReq = {
       id: 'req-' + Math.floor(200 + Math.random() * 800),
       createdAt: new Date().toISOString(),
-      status: 'ACTIVE',
+      status: 'OPEN',
       ...reqData,
+      priority: effPriority === 'CRITICAL' ? 'HIGH' : effPriority,
+      urgency: effPriority === 'CRITICAL' ? 'HIGH' : effPriority,
     };
     mockRequirements.unshift(newReq);
     save(STORAGE_KEYS.REQUIREMENTS, mockRequirements);
     return newReq;
   },
+
+  updateRequirement: async (requirementId, reqData) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/requirements/${requirementId}`, {
+          method: 'PATCH',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(reqData),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          const updated = json.data || json;
+          return {
+            ...updated,
+            id: updated.id || updated._id,
+            priority: updated.priority || 'MEDIUM',
+            urgency: updated.urgency || updated.priority || 'MEDIUM',
+          };
+        }
+        throw new Error(json.message || 'Failed to update requirement');
+      } catch (e) {
+        console.warn('Backend updateRequirement error:', e);
+        throw e;
+      }
+    }
+    await delay(150);
+    const req = mockRequirements.find((r) => r.id === requirementId || r._id === requirementId);
+    if (!req) throw new Error('Requirement not found');
+    Object.assign(req, reqData);
+    save(STORAGE_KEYS.REQUIREMENTS, mockRequirements);
+    return req;
+  },
+
 
   getSmartMatches: async (recipientId) => {
     if (!USE_MOCK) {
@@ -523,7 +667,7 @@ export const api = {
     });
   },
 
-  acceptDonation: async ({ donationId, recipientId, recipientName, quantityAccepted, notes }) => {
+  acceptDonation: async ({ donationId, recipientId, recipientName, quantityAccepted, notes, deliveryFee }) => {
     if (!USE_MOCK) {
       try {
         const token = localStorage.getItem('sap_jwt_token');
@@ -537,6 +681,7 @@ export const api = {
             recipientId,
             quantityAccepted: Number(quantityAccepted),
             notes,
+            deliveryFee,
           }),
         });
         const json = await res.json();
@@ -633,28 +778,44 @@ export const api = {
   // ----------------------------------------------------
   // DELIVERY AGENT JOURNEY & QR VERIFICATION
   // ----------------------------------------------------
-  getDeliveryTasks: async (deliveryAgentId) => {
+  getDeliveryTasks: async (deliveryAgentId, filter = {}) => {
     if (!USE_MOCK) {
       try {
         const token = localStorage.getItem('sap_jwt_token');
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        const res = await fetch(`${API_BASE}/delivery/tasks?agentId=${deliveryAgentId || ''}`, {
+        const params = new URLSearchParams({ agentId: deliveryAgentId || '' });
+        Object.entries(filter).forEach(([k, v]) => {
+          if (v !== undefined && v !== null && v !== '') {
+            params.append(k, Array.isArray(v) ? v.join(',') : v);
+          }
+        });
+        const res = await fetch(`${API_BASE}/delivery/tasks?${params.toString()}`, {
           headers,
           credentials: 'include',
         });
         const json = await res.json();
         if (res.ok) {
           const list = Array.isArray(json) ? json : (json.data || []);
-          return list.map((t) => ({ ...t, id: t.id || t._id }));
+          return list.map((t) => ({
+            ...t,
+            id: t.id || t._id,
+            priority: t.priority || 'MEDIUM',
+            priorityWeight: t.priorityWeight || 2,
+          }));
         }
       } catch (e) {
         console.warn('Backend tasks fetch error, using local fallback:', e);
       }
     }
     await delay(150);
-    return mockTasks;
+    return mockTasks.map((t) => ({
+      ...t,
+      priority: t.priority || 'MEDIUM',
+      priorityWeight: t.priorityWeight || 2,
+    }));
   },
+
 
   updateDeliveryMilestone: async (taskId, nextMilestone) => {
     if (!USE_MOCK) {
@@ -1248,5 +1409,455 @@ export const api = {
     save(STORAGE_KEYS.REVIEWS, INITIAL_REVIEWS);
     return true;
   },
+
+  fetchNearbyMap: async ({ lat, lng, radiusKm = 5, kind }) => {
+    let url = `${API_BASE}/map/nearby?lat=${lat}&lng=${lng}&radiusKm=${radiusKm}`;
+    if (kind && kind !== 'all') url += `&kind=${kind}`;
+    const token = localStorage.getItem('sap_jwt_token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    try {
+      const res = await fetch(url, { headers, credentials: 'include' });
+      if (res.ok) {
+        const json = await res.json();
+        return json.data || json;
+      }
+    } catch (err) {
+      console.warn('Live map/nearby fallback:', err);
+    }
+    const donations = (mockDonations || []).map((d) => ({ ...d, kind: 'donation' }));
+    const reqs = (mockRequirements || []).map((r) => ({ ...r, kind: 'requirement' }));
+    return [...donations, ...reqs];
+  },
+
+  searchAddress: async (q) => {
+    const url = `${API_BASE}/geo/search?q=${encodeURIComponent(q)}`;
+    const token = localStorage.getItem('sap_jwt_token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    try {
+      const res = await fetch(url, { headers, credentials: 'include' });
+      if (res.ok) {
+        const json = await res.json();
+        return json.data || json;
+      }
+    } catch (err) {
+      console.warn('Live geo/search fallback:', err);
+    }
+    try {
+      const osmRes = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&countrycodes=in&limit=5`
+      );
+      if (osmRes.ok) return await osmRes.json();
+    } catch {}
+    return [];
+  },
+
+  reverseGeocode: async (lat, lng) => {
+    const url = `${API_BASE}/geo/reverse?lat=${lat}&lng=${lng}`;
+    const token = localStorage.getItem('sap_jwt_token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    try {
+      const res = await fetch(url, { headers, credentials: 'include' });
+      if (res.ok) {
+        const json = await res.json();
+        return json.data || json;
+      }
+    } catch (err) {
+      console.warn('Live geo/reverse fallback:', err);
+    }
+    return { address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`, city: 'Bengaluru' };
+  },
+
+  fetchRoute: async (fromLat, fromLng, toLat, toLng) => {
+    const url = `${API_BASE}/geo/route?fromLat=${fromLat}&fromLng=${fromLng}&toLat=${toLat}&toLng=${toLng}`;
+    const token = localStorage.getItem('sap_jwt_token');
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    try {
+      const res = await fetch(url, { headers, credentials: 'include' });
+      if (res.ok) {
+        const json = await res.json();
+        return json.data || json;
+      }
+    } catch (err) {
+      console.warn('Live geo/route fallback:', err);
+    }
+    return { distanceKm: 5, durationMinutes: 15, estimated: true };
+  },
+
+  updateMapVisibility: async (mapVisible) => {
+    const token = localStorage.getItem('sap_jwt_token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/auth/me/map-visibility`, {
+      method: 'PATCH',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({ mapVisible }),
+    });
+    const json = await res.json();
+    return json.data || json;
+  },
+
+  updateAgentPreferences: async (preferences) => {
+    const token = localStorage.getItem('sap_jwt_token');
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/auth/me/agent-preferences`, {
+      method: 'PATCH',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify(preferences),
+    });
+    const json = await res.json();
+    return json.data || json;
+  },
+
+  getSuggestedDeliveryFee: async (acceptanceId) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/fees/suggest?acceptanceId=${acceptanceId}`, {
+          method: 'GET',
+          headers,
+          credentials: 'include',
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend fee suggestion error, using fallback:', e);
+      }
+    }
+    return {
+      suggestedAmount: 95,
+      distanceKm: 3.5,
+      baseAmount: 40,
+      perKm: 12,
+      maxAmount: 500,
+      currency: 'INR',
+    };
+  },
+
+  updateDeliveryFee: async (acceptanceId, { payerMode, amount, splitRatio, auditNote }) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/acceptances/${acceptanceId}/delivery-fee`, {
+          method: 'PUT',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ payerMode, amount, splitRatio, auditNote }),
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend update fee error:', e);
+      }
+    }
+    return { payerMode, amount, status: payerMode === 'NONE' ? 'AGREED' : 'PROPOSED' };
+  },
+
+  settleDeliveryFee: async (acceptanceId, { note } = {}) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/acceptances/${acceptanceId}/delivery-fee/settle`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ note }),
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend settle fee error:', e);
+      }
+    }
+    return { settled: true, note };
+  },
+
+  // Phase 3 Matching & Allotment Services
+  getMatchRecommendations: async ({ donationId, requirementId, radiusKm, priority, page, limit } = {}) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const params = new URLSearchParams();
+        if (donationId) params.append('donationId', donationId);
+        if (requirementId) params.append('requirementId', requirementId);
+        if (radiusKm) params.append('radiusKm', radiusKm);
+        if (priority) params.append('priority', priority);
+        if (page) params.append('page', page);
+        if (limit) params.append('limit', limit);
+        const res = await fetch(`${API_BASE}/matches/recommendations?${params.toString()}`, {
+          headers,
+          credentials: 'include',
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend match recommendations error:', e);
+      }
+    }
+    return { recommendations: [], total: 0, expandedRadius: false };
+  },
+
+  getSplitPlan: async (donationId, maxParts = 4) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/donations/${donationId}/split-plan?maxParts=${maxParts}`, {
+          headers,
+          credentials: 'include',
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend split plan error:', e);
+      }
+    }
+    return { parts: [], totalAllocated: 0, unallocated: 0 };
+  },
+
+  confirmSplitPlan: async (donationId, parts) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/donations/${donationId}/split-plan/confirm`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ parts }),
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend confirm split error:', e);
+      }
+    }
+    return { success: true, offersCreated: parts?.length || 0 };
+  },
+
+  updateAllotMode: async (donationId, allotMode) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/donations/${donationId}/allot-mode`, {
+          method: 'PATCH',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ allotMode }),
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend allot mode error:', e);
+      }
+    }
+    return { allotMode };
+  },
+
+  declineOffer: async (offerId, reason) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/matches/offers/${offerId}/decline`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ reason }),
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend decline offer error:', e);
+      }
+    }
+    return { success: true, message: 'Offer declined' };
+  },
+
+  rejectAcceptance: async (acceptanceId, reason) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/acceptances/${acceptanceId}/reject`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ reason }),
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend reject acceptance error:', e);
+      }
+    }
+    return { status: 'REJECTED' };
+  },
+
+  getRequirementCompletion: async (requirementId) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/requirements/${requirementId}/complete-with`, {
+          headers,
+          credentials: 'include',
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend complete-with error:', e);
+      }
+    }
+    return { suggestedDonations: [], remainingGap: 0 };
+  },
+
+  // DELIVERY BATCHING & CO-ROUTING (PHASE 4)
+  getAvailableBatches: async ({ vehicleType = '2_WHEELER', agentId = '' } = {}) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const params = new URLSearchParams({ vehicleType, agentId });
+        const res = await fetch(`${API_BASE}/delivery/batches/available?${params.toString()}`, {
+          headers,
+          credentials: 'include',
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend available batches error:', e);
+      }
+    }
+    return { proposedBatches: [], suggestedBatches: [], unbatchedOpenTaskCount: 0 };
+  },
+
+  previewBatchRoute: async ({ taskIds, vehicleType = '2_WHEELER' }) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/delivery/batches/preview`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ taskIds, vehicleType }),
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend preview batch error:', e);
+      }
+    }
+    return null;
+  },
+
+  createDeliveryBatch: async ({ taskIds, vehicleType = '2_WHEELER' }) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/delivery/batches`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify({ taskIds, vehicleType }),
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+        throw new Error(json.error?.message || 'Failed to create delivery batch');
+      } catch (e) {
+        throw e;
+      }
+    }
+    return null;
+  },
+
+  getDeliveryBatch: async (batchId) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/delivery/batches/${batchId}`, {
+          headers,
+          credentials: 'include',
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend get batch error:', e);
+      }
+    }
+    return null;
+  },
+
+  claimDeliveryBatch: async (batchId, agentInfo = {}) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/delivery/batches/${batchId}/claim`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(agentInfo),
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+        throw new Error(json.error?.message || 'Failed to claim batch');
+      } catch (e) {
+        throw e;
+      }
+    }
+    return { status: 'CLAIMED' };
+  },
+
+  releaseDeliveryBatch: async (batchId) => {
+    if (!USE_MOCK) {
+      try {
+        const token = localStorage.getItem('sap_jwt_token');
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_BASE}/delivery/batches/${batchId}/release`, {
+          method: 'POST',
+          headers,
+          credentials: 'include',
+        });
+        const json = await res.json();
+        if (res.ok) return json.data || json;
+      } catch (e) {
+        console.warn('Backend release batch error:', e);
+      }
+    }
+    return { status: 'CANCELLED' };
+  },
 };
+
+export default api;
 

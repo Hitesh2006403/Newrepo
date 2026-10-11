@@ -1,5 +1,7 @@
 import React from 'react';
+import { PriorityBadge } from '../common/PriorityBadge';
 import { ExpiryTimer } from '../common/ExpiryTimer';
+import MatchScoreBadge from '../../features/matching/MatchScoreBadge';
 import {
   Sparkles,
   MapPin,
@@ -25,10 +27,14 @@ export const MatchCard = ({ match, onClaim }) => {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-black/30" />
 
-          {/* Glowing Smart-Match Score Badge */}
-          <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-extrabold text-xs px-2.5 py-1 rounded-full shadow-lg shadow-emerald-900/40 border border-emerald-400">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>{matchScore}% SMART MATCH</span>
+          {/* Explainable Match Score Badge */}
+          <div className="absolute top-3 left-3 z-10">
+            <MatchScoreBadge
+              matchScore={matchScore}
+              breakdown={match.scoreBreakdown || match.breakdown || {}}
+              tier={match.tier || 1}
+              reasons={reasons}
+            />
           </div>
 
           {/* Distance Badge */}
@@ -40,7 +46,7 @@ export const MatchCard = ({ match, onClaim }) => {
           {/* Dietary & Category bottom pills */}
           <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white text-xs">
             <span className="font-semibold uppercase text-[11px] tracking-wider bg-white/20 backdrop-blur-xs px-2 py-0.5 rounded">
-              {donation.dietaryCategory} • {donation.foodType?.replace('_', ' ')}
+              {donation.dietaryCategory || 'Standard'} • {donation.foodType?.replace('_', ' ')}
             </span>
             <span className="font-bold text-amber-300 text-sm">
               {donation.remainingQuantity} {donation.unit} left
@@ -50,12 +56,16 @@ export const MatchCard = ({ match, onClaim }) => {
 
         {/* Card Body */}
         <div className="p-5 space-y-4">
-          <div>
-            <h4 className="font-bold text-base text-slate-800 line-clamp-1 leading-snug">
-              {donation.foodName}
-            </h4>
-            <p className="text-xs text-slate-500 mt-0.5">By {donation.donorName}</p>
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h4 className="font-bold text-base text-slate-800 line-clamp-1 leading-snug">
+                {donation.foodName}
+              </h4>
+              <p className="text-xs text-slate-500 mt-0.5">By {donation.donorName}</p>
+            </div>
+            <PriorityBadge priority={donation.priority || 'MEDIUM'} compact />
           </div>
+
 
           {/* Match Score Reason Breakdown */}
           <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 space-y-1.5">
